@@ -24,4 +24,4 @@ serve({
   },
 });
 
-console.log('sigmatodo2-web running on http://localhost:3000');
+console.log(`sigmatodo2-web running on http://localhost:3000, API is ${API_URL}`);
