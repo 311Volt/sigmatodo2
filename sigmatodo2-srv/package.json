@@ -1,0 +1,25 @@
+{
+  "name": "sigmatodo2-srv",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "APP_MODE=dev bun --hot index.ts",
+    "start": "APP_MODE=prod bun index.ts"
+  },
+  "dependencies": {
+    "fastify": "^5",
+    "@fastify/jwt": "^9",
+    "@fastify/cors": "^10",
+    "@fastify/multipart": "^9",
+"@supabase/supabase-js": "^2",
+    "zod": "^3",
+    "sigmatodo2-common": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
