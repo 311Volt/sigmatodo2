@@ -47,17 +47,45 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
 
   const update = useMutation({
     mutationFn: (data: Parameters<typeof issuesApi.update>[1]) => issuesApi.update(issueCode, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['issue', issueCode] }),
-  });
 
-  const updateIssuesInList = () => {
-    if (issue) qc.invalidateQueries({ queryKey: ['issues', issue.projectCode] });
-  };
+    onMutate: async (data) => {
+      const projectCode = issue?.projectCode;
+      await qc.cancelQueries({ queryKey: ['issue', issueCode] });
+      if (projectCode) await qc.cancelQueries({ queryKey: ['issues', projectCode] });
+
+      const prevDetail = qc.getQueryData(['issue', issueCode]);
+      const prevLists = projectCode
+        ? qc.getQueriesData<IssueWithAssignee[]>({ queryKey: ['issues', projectCode] })
+        : [];
+
+      qc.setQueryData(['issue', issueCode], (old: typeof issue) =>
+        old ? { ...old, ...data } : old,
+      );
+      if (projectCode) {
+        qc.setQueriesData<IssueWithAssignee[]>(
+          { queryKey: ['issues', projectCode] },
+          (old) => old?.map((i) => (i.code === issueCode ? { ...i, ...data } : i)),
+        );
+      }
+
+      return { prevDetail, prevLists, projectCode };
+    },
+
+    onError: (_err, _data, ctx) => {
+      if (ctx?.prevDetail) qc.setQueryData(['issue', issueCode], ctx.prevDetail);
+      ctx?.prevLists?.forEach(([key, val]) => qc.setQueryData(key, val));
+    },
+
+    onSettled: (_data, _err, _vars, ctx) => {
+      qc.invalidateQueries({ queryKey: ['issue', issueCode] });
+      if (ctx?.projectCode)
+        qc.invalidateQueries({ queryKey: ['issues', ctx.projectCode] });
+    },
+  });
 
   const saveDesc = () => {
     update.mutate({ markdownDescription: descDraft });
     setEditingDesc(false);
-    updateIssuesInList();
   };
 
   const uploadFile = useMutation({
@@ -232,7 +260,7 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
               <p className="text-xs font-medium text-muted-foreground uppercase">Status</p>
               <Select
                 value={issue.status}
-                onValueChange={status => { update.mutate({ status }); updateIssuesInList(); }}
+                onValueChange={status => update.mutate({ status })}
               >
                 <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -244,7 +272,7 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
               <p className="text-xs font-medium text-muted-foreground uppercase">Priority</p>
               <Select
                 value={issue.priority}
-                onValueChange={priority => { update.mutate({ priority }); updateIssuesInList(); }}
+                onValueChange={priority => update.mutate({ priority })}
               >
                 <SelectTrigger className="h-8 text-xs capitalize"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -260,10 +288,9 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
                 type="datetime-local"
                 className="w-full h-8 rounded-md border border-input bg-transparent px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 value={issue.dueBy ? issue.dueBy.slice(0, 16) : ''}
-                onChange={e => {
-                  update.mutate({ dueBy: e.target.value ? new Date(e.target.value).toISOString() : null });
-                  updateIssuesInList();
-                }}
+                onChange={e =>
+                  update.mutate({ dueBy: e.target.value ? new Date(e.target.value).toISOString() : null })
+                }
               />
             </div>
           </aside>
