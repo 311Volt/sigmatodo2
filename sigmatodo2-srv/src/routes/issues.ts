@@ -63,7 +63,7 @@ export async function issueRoutes(app: FastifyInstance) {
     const body = CreateIssueSchema.safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: body.error.issues[0]?.message });
 
-    const issue = await callDB(db, 'createIssue', { projectCode: code, ...body.data });
+    const issue = await callDB(db, 'createIssue', { projectCode: code, createdBy: me, ...body.data });
     return reply.status(201).send(issue);
   });
 

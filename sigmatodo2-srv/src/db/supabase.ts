@@ -194,6 +194,7 @@ export class SupabaseDB {
     status: string;
     priority?: Priority;
     assignedTo?: string | null;
+    createdBy?: string | null;
     dueBy?: string | null;
     markdownDescription?: string | null;
   }): Promise<Issue> {
@@ -206,6 +207,7 @@ export class SupabaseDB {
       status: params.status,
       priority: params.priority ?? 'normal',
       assigned_to: params.assignedTo,
+      created_by: params.createdBy ?? null,
       due_by: params.dueBy,
       markdown_description: params.markdownDescription,
     }).select().single();
@@ -218,13 +220,22 @@ export class SupabaseDB {
   }
 
   async getIssueWithAssignee(code: string): Promise<IssueWithAssignee | null> {
-    const { data } = await this.sb.from('issues').select('*, users(*)').eq('code', code).single();
+    const { data } = await this.sb.from('issues')
+      .select('*, assignee:users!assigned_to(*), creator:users!created_by(*)')
+      .eq('code', code).single();
     if (!data) return null;
-    return { ...this.mapIssue(data), assignee: data.users ? this.mapUser(data.users) : null };
+    const row = data as Record<string, unknown>;
+    return {
+      ...this.mapIssue(row),
+      assignee: row.assignee ? this.mapUser(row.assignee as Record<string, unknown>) : null,
+      creator: row.creator ? this.mapUser(row.creator as Record<string, unknown>) : null,
+    };
   }
 
   async getProjectIssues(projectCode: string, sort: SortOption, myHandle: string): Promise<IssueWithAssignee[]> {
-    let query = this.sb.from('issues').select('*, users(*)').eq('project_code', projectCode);
+    let query = this.sb.from('issues')
+      .select('*, assignee:users!assigned_to(*), creator:users!created_by(*)')
+      .eq('project_code', projectCode);
     switch (sort) {
       case 'created': query = query.order('created_on', { ascending: false }); break;
       case 'due': query = query.order('due_by', { ascending: true, nullsFirst: false }); break;
@@ -232,10 +243,14 @@ export class SupabaseDB {
       default: break;
     }
     const { data } = await query;
-    const issues = (data ?? []).map(row => ({
-      ...this.mapIssue(row),
-      assignee: row.users ? this.mapUser(row.users) : null,
-    }));
+    const issues = (data ?? []).map(row => {
+      const r = row as Record<string, unknown>;
+      return {
+        ...this.mapIssue(r),
+        assignee: r.assignee ? this.mapUser(r.assignee as Record<string, unknown>) : null,
+        creator: r.creator ? this.mapUser(r.creator as Record<string, unknown>) : null,
+      };
+    });
     if (sort === 'relevant') return this.sortRelevant(issues, projectCode);
     return issues;
   }
@@ -419,6 +434,7 @@ export class SupabaseDB {
       code: row.code as string,
       projectCode: row.project_code as string,
       assignedTo: row.assigned_to as string | null,
+      createdBy: row.created_by as string | null,
       priority: row.priority as Priority,
       createdOn: row.created_on as string,
       updatedOn: row.updated_on as string,

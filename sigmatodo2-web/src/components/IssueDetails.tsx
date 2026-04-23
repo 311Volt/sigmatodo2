@@ -7,10 +7,10 @@ const toLocalInputValue = (iso: string) => {
 };
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Paperclip, Trash2, Pencil, Check } from 'lucide-react';
-import { issues as issuesApi, attachments as attachmentsApi, comments as commentsApi } from '@/lib/api';
+import { issues as issuesApi, attachments as attachmentsApi, comments as commentsApi, projects as projectsApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatTimeLeft } from '@/lib/time';
-import type { Project, Comment } from 'sigmatodo2-common';
+import type { Project, Comment, IssueWithAssignee } from 'sigmatodo2-common';
 import MarkdownEditor from '@/components/MarkdownEditor';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import { Button } from '@/components/ui/button';
@@ -51,6 +51,12 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
     enabled: !!issue,
   });
 
+  const { data: memberList = [] } = useQuery({
+    queryKey: ['members', project?.code],
+    queryFn: () => projectsApi.getMembers(project!.code),
+    enabled: !!project,
+  });
+
   const update = useMutation({
     mutationFn: (data: Parameters<typeof issuesApi.update>[1]) => issuesApi.update(issueCode, data),
 
@@ -70,7 +76,7 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
       if (projectCode) {
         qc.setQueriesData<IssueWithAssignee[]>(
           { queryKey: ['issues', projectCode] },
-          (old) => old?.map((i) => (i.code === issueCode ? { ...i, ...data } : i)),
+          (old) => old?.map((i) => (i.code === issueCode ? { ...i, ...data } as IssueWithAssignee : i)),
         );
       }
 
@@ -260,77 +266,132 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
         </div>
 
         {/* Sidebar */}
-        {canEdit && (
-          <aside className="w-48 border-l p-4 flex flex-col gap-4 text-sm shrink-0">
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase">Status</p>
-              <Select
-                value={issue.status}
-                onValueChange={status => update.mutate({ status })}
-              >
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {statusDefs.map(s => <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase">Priority</p>
-              <Select
-                value={issue.priority}
-                onValueChange={priority => update.mutate({ priority })}
-              >
-                <SelectTrigger className="h-8 text-xs capitalize"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {(['low', 'normal', 'high', 'highest'] as const).map(p => (
-                    <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={!!issue.dueBy}
-                  onChange={e =>
-                    update.mutate({ dueBy: e.target.checked ? new Date().toISOString() : null })
-                  }
-                  className="size-3"
-                />
-                <p className="text-xs font-medium text-muted-foreground uppercase">Due date</p>
-              </label>
-              {issue.dueBy && (
-                <>
-                  <input
-                    type="datetime-local"
-                    className="w-full h-8 rounded-md border border-input bg-transparent px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    value={toLocalInputValue(issue.dueBy)}
-                    onChange={e =>
-                      update.mutate({ dueBy: e.target.value ? new Date(e.target.value).toISOString() : null })
-                    }
-                  />
-                  <div className="flex flex-col gap-1 pt-0.5">
-                    {[
-                      { label: 'by 23:59 today', getDate: () => { const d = new Date(); d.setHours(23, 59, 0, 0); return d; } },
-                      { label: 'in 3 days',      getDate: () => { const d = new Date(); d.setDate(d.getDate() + 3); d.setHours(23, 59, 0, 0); return d; } },
-                      { label: 'in a week',      getDate: () => { const d = new Date(); d.setDate(d.getDate() + 7); d.setHours(23, 59, 0, 0); return d; } },
-                    ].map(({ label, getDate }) => (
-                      <button
-                        key={label}
-                        type="button"
-                        onClick={() => update.mutate({ dueBy: getDate().toISOString() })}
-                        className="text-left text-xs text-muted-foreground hover:text-foreground hover:underline"
-                      >
-                        {label}
-                      </button>
+        <aside className="w-48 border-l p-4 flex flex-col gap-4 text-sm shrink-0">
+          {canEdit && (
+            <>
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase">Status</p>
+                <Select
+                  value={issue.status}
+                  onValueChange={status => update.mutate({ status })}
+                >
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {statusDefs.map(s => <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase">Priority</p>
+                <Select
+                  value={issue.priority}
+                  onValueChange={priority => update.mutate({ priority })}
+                >
+                  <SelectTrigger className="h-8 text-xs capitalize"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(['low', 'normal', 'high', 'highest'] as const).map(p => (
+                      <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>
                     ))}
-                  </div>
-                </>
-              )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase">Assignee</p>
+                <Select
+                  value={issue.assignedTo ?? '__none__'}
+                  onValueChange={v => update.mutate({ assignedTo: v === '__none__' ? null : v })}
+                >
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Unassigned</SelectItem>
+                    {memberList.map(m => (
+                      <SelectItem key={m.userHandle} value={m.userHandle}>
+                        <div className="flex items-center gap-1.5">
+                          <Avatar className="size-4 shrink-0">
+                            <AvatarImage src={m.user?.avatarPath ?? undefined} />
+                            <AvatarFallback className="text-[9px]">
+                              {(m.user?.displayName ?? m.userHandle).charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          {m.user?.displayName ?? m.userHandle}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!issue.dueBy}
+                    onChange={e =>
+                      update.mutate({ dueBy: e.target.checked ? new Date().toISOString() : null })
+                    }
+                    className="size-3"
+                  />
+                  <p className="text-xs font-medium text-muted-foreground uppercase">Due date</p>
+                </label>
+                {issue.dueBy && (
+                  <>
+                    <input
+                      type="datetime-local"
+                      className="w-full h-8 rounded-md border border-input bg-transparent px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={toLocalInputValue(issue.dueBy)}
+                      onChange={e =>
+                        update.mutate({ dueBy: e.target.value ? new Date(e.target.value).toISOString() : null })
+                      }
+                    />
+                    <div className="flex flex-col gap-1 pt-0.5">
+                      {[
+                        { label: 'by 23:59 today', getDate: () => { const d = new Date(); d.setHours(23, 59, 0, 0); return d; } },
+                        { label: 'in 3 days',      getDate: () => { const d = new Date(); d.setDate(d.getDate() + 3); d.setHours(23, 59, 0, 0); return d; } },
+                        { label: 'in a week',      getDate: () => { const d = new Date(); d.setDate(d.getDate() + 7); d.setHours(23, 59, 0, 0); return d; } },
+                      ].map(({ label, getDate }) => (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() => update.mutate({ dueBy: getDate().toISOString() })}
+                          className="text-left text-xs text-muted-foreground hover:text-foreground hover:underline"
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+          {!canEdit && issue.assignedTo && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground uppercase">Assignee</p>
+              <p className="text-xs">{issue.assignee?.displayName ?? issue.assignedTo}</p>
             </div>
-          </aside>
-        )}
+          )}
+          <div className="border-t pt-3 flex flex-col gap-2 mt-auto">
+            <div className="space-y-0.5">
+              <p className="text-xs font-medium text-muted-foreground uppercase">Created by</p>
+              <div className="flex items-center gap-1.5">
+                <Avatar className="size-4 shrink-0">
+                  <AvatarImage src={issue.creator?.avatarPath ?? undefined} />
+                  <AvatarFallback className="text-[9px]">
+                    {(issue.creator?.displayName ?? issue.createdBy ?? '?').charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <p className="text-xs">{issue.creator?.displayName ?? issue.createdBy ?? '—'}</p>
+              </div>
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-xs font-medium text-muted-foreground uppercase">Created</p>
+              <p className="text-xs">{new Date(issue.createdOn).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'medium' })}</p>
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-xs font-medium text-muted-foreground uppercase">Updated</p>
+              <p className="text-xs">{new Date(issue.updatedOn).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'medium' })}</p>
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   );

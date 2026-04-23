@@ -85,6 +85,7 @@ CREATE TABLE issues (
   code TEXT PRIMARY KEY,
   project_code TEXT NOT NULL REFERENCES projects(code) ON DELETE CASCADE,
   assigned_to TEXT REFERENCES users(handle) ON DELETE SET NULL,
+  created_by TEXT REFERENCES users(handle) ON DELETE SET NULL,
   priority TEXT NOT NULL DEFAULT 'normal',
   created_on TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_on TIMESTAMPTZ NOT NULL DEFAULT NOW(),

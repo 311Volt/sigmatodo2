@@ -74,6 +74,7 @@ export interface Issue {
   code: string;
   projectCode: string;
   assignedTo: string | null;
+  createdBy: string | null;
   priority: Priority;
   createdOn: string;
   updatedOn: string;
@@ -86,6 +87,7 @@ export interface Issue {
 
 export interface IssueWithAssignee extends Issue {
   assignee: User | null;
+  creator: User | null;
 }
 
 export interface Attachment {

@@ -38,6 +38,7 @@ function rowToIssue(row: Record<string, unknown>): Issue {
     code: row.code as string,
     projectCode: row.project_code as string,
     assignedTo: row.assigned_to as string | null,
+    createdBy: row.created_by as string | null,
     priority: row.priority as Priority,
     createdOn: row.created_on as string,
     updatedOn: row.updated_on as string,
@@ -110,6 +111,7 @@ export class SQLiteDB {
         code TEXT PRIMARY KEY,
         project_code TEXT NOT NULL,
         assigned_to TEXT,
+        created_by TEXT,
         priority TEXT NOT NULL DEFAULT 'normal',
         created_on TEXT NOT NULL DEFAULT (datetime('now')),
         updated_on TEXT NOT NULL DEFAULT (datetime('now')),
@@ -119,7 +121,8 @@ export class SQLiteDB {
         markdown_description TEXT,
         comment_count INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY (project_code) REFERENCES projects(code) ON DELETE CASCADE,
-        FOREIGN KEY (assigned_to) REFERENCES users(handle) ON DELETE SET NULL
+        FOREIGN KEY (assigned_to) REFERENCES users(handle) ON DELETE SET NULL,
+        FOREIGN KEY (created_by) REFERENCES users(handle) ON DELETE SET NULL
       );
 
       CREATE TABLE IF NOT EXISTS attachments (
@@ -154,6 +157,11 @@ export class SQLiteDB {
         FOREIGN KEY (invited_by) REFERENCES users(handle)
       );
     `);
+
+    const issueColumns = (this.db.query('PRAGMA table_info(issues)').all() as { name: string }[]).map(c => c.name);
+    if (!issueColumns.includes('created_by')) {
+      this.db.exec('ALTER TABLE issues ADD COLUMN created_by TEXT REFERENCES users(handle) ON DELETE SET NULL');
+    }
   }
 
   // ── Users ────────────────────────────────────────────────────────────────
@@ -368,18 +376,19 @@ export class SQLiteDB {
     status: string;
     priority?: Priority;
     assignedTo?: string | null;
+    createdBy?: string | null;
     dueBy?: string | null;
     markdownDescription?: string | null;
   }): Issue {
     const n = this.nextIssueNumber(params.projectCode);
     const code = `${params.projectCode}-${n}`;
     this.db.query(`
-      INSERT INTO issues (code, project_code, title, status, priority, assigned_to, due_by, markdown_description)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO issues (code, project_code, title, status, priority, assigned_to, created_by, due_by, markdown_description)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       code, params.projectCode, params.title, params.status,
       params.priority ?? 'normal', params.assignedTo ?? null,
-      params.dueBy ?? null, params.markdownDescription ?? null,
+      params.createdBy ?? null, params.dueBy ?? null, params.markdownDescription ?? null,
     );
     return this.getIssue(code)!;
   }
@@ -391,9 +400,12 @@ export class SQLiteDB {
 
   getIssueWithAssignee(code: string): IssueWithAssignee | null {
     const row = this.db.query(`
-      SELECT i.*, u.handle as u_handle, u.display_name, u.avatar_path, u.bio, u.created_on as u_created_on
+      SELECT i.*,
+        u.handle as u_handle, u.display_name as u_display_name, u.avatar_path as u_avatar_path, u.bio as u_bio, u.created_on as u_created_on,
+        cr.handle as cr_handle, cr.display_name as cr_display_name, cr.avatar_path as cr_avatar_path, cr.bio as cr_bio, cr.created_on as cr_created_on
       FROM issues i
       LEFT JOIN users u ON u.handle = i.assigned_to
+      LEFT JOIN users cr ON cr.handle = i.created_by
       WHERE i.code = ?
     `).get(code) as Record<string, unknown> | null;
     if (!row) return null;
@@ -401,11 +413,18 @@ export class SQLiteDB {
     const assignee: User | null = row.u_handle ? {
       handle: row.u_handle as string,
       createdOn: row.u_created_on as string,
-      displayName: row.display_name as string,
-      avatarPath: row.avatar_path as string | null,
-      bio: row.bio as string | null,
+      displayName: row.u_display_name as string,
+      avatarPath: row.u_avatar_path as string | null,
+      bio: row.u_bio as string | null,
     } : null;
-    return { ...issue, assignee };
+    const creator: User | null = row.cr_handle ? {
+      handle: row.cr_handle as string,
+      createdOn: row.cr_created_on as string,
+      displayName: row.cr_display_name as string,
+      avatarPath: row.cr_avatar_path as string | null,
+      bio: row.cr_bio as string | null,
+    } : null;
+    return { ...issue, assignee, creator };
   }
 
   getProjectIssues(projectCode: string, sort: SortOption, myHandle: string): IssueWithAssignee[] {
@@ -419,9 +438,11 @@ export class SQLiteDB {
 
     const rows = this.db.query(`
       SELECT i.*,
-        u.handle as u_handle, u.display_name, u.avatar_path, u.bio, u.created_on as u_created_on
+        u.handle as u_handle, u.display_name as u_display_name, u.avatar_path as u_avatar_path, u.bio as u_bio, u.created_on as u_created_on,
+        cr.handle as cr_handle, cr.display_name as cr_display_name, cr.avatar_path as cr_avatar_path, cr.bio as cr_bio, cr.created_on as cr_created_on
       FROM issues i
       LEFT JOIN users u ON u.handle = i.assigned_to
+      LEFT JOIN users cr ON cr.handle = i.created_by
       WHERE i.project_code = ?
       ORDER BY ${orderBy}
     `).all(projectCode) as Record<string, unknown>[];
@@ -431,11 +452,18 @@ export class SQLiteDB {
       const assignee: User | null = row.u_handle ? {
         handle: row.u_handle as string,
         createdOn: row.u_created_on as string,
-        displayName: row.display_name as string,
-        avatarPath: row.avatar_path as string | null,
-        bio: row.bio as string | null,
+        displayName: row.u_display_name as string,
+        avatarPath: row.u_avatar_path as string | null,
+        bio: row.u_bio as string | null,
       } : null;
-      return { ...issue, assignee };
+      const creator: User | null = row.cr_handle ? {
+        handle: row.cr_handle as string,
+        createdOn: row.cr_created_on as string,
+        displayName: row.cr_display_name as string,
+        avatarPath: row.cr_avatar_path as string | null,
+        bio: row.cr_bio as string | null,
+      } : null;
+      return { ...issue, assignee, creator };
     });
 
     if (sort === 'relevant') {
