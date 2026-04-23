@@ -1,4 +1,10 @@
 import { useState, useRef } from 'react';
+
+const toLocalInputValue = (iso: string) => {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Paperclip, Trash2, Pencil, Check } from 'lucide-react';
 import { issues as issuesApi, attachments as attachmentsApi, comments as commentsApi } from '@/lib/api';
@@ -283,15 +289,45 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
               </Select>
             </div>
             <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase">Due date</p>
-              <input
-                type="datetime-local"
-                className="w-full h-8 rounded-md border border-input bg-transparent px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                value={issue.dueBy ? issue.dueBy.slice(0, 16) : ''}
-                onChange={e =>
-                  update.mutate({ dueBy: e.target.value ? new Date(e.target.value).toISOString() : null })
-                }
-              />
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!issue.dueBy}
+                  onChange={e =>
+                    update.mutate({ dueBy: e.target.checked ? new Date().toISOString() : null })
+                  }
+                  className="size-3"
+                />
+                <p className="text-xs font-medium text-muted-foreground uppercase">Due date</p>
+              </label>
+              {issue.dueBy && (
+                <>
+                  <input
+                    type="datetime-local"
+                    className="w-full h-8 rounded-md border border-input bg-transparent px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={toLocalInputValue(issue.dueBy)}
+                    onChange={e =>
+                      update.mutate({ dueBy: e.target.value ? new Date(e.target.value).toISOString() : null })
+                    }
+                  />
+                  <div className="flex flex-col gap-1 pt-0.5">
+                    {[
+                      { label: 'by 23:59 today', getDate: () => { const d = new Date(); d.setHours(23, 59, 0, 0); return d; } },
+                      { label: 'in 3 days',      getDate: () => { const d = new Date(); d.setDate(d.getDate() + 3); d.setHours(23, 59, 0, 0); return d; } },
+                      { label: 'in a week',      getDate: () => { const d = new Date(); d.setDate(d.getDate() + 7); d.setHours(23, 59, 0, 0); return d; } },
+                    ].map(({ label, getDate }) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => update.mutate({ dueBy: getDate().toISOString() })}
+                        className="text-left text-xs text-muted-foreground hover:text-foreground hover:underline"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </aside>
         )}
