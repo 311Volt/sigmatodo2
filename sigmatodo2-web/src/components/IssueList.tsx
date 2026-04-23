@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Plus, ArrowDown, ArrowRight, ArrowUp, ChevronsUp } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { issues as issuesApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'relevant', label: 'Relevant' },
@@ -206,8 +207,11 @@ const PRIORITY_COLORS: Record<string, string> = {
   highest: 'text-red-500',
 };
 
-const PRIORITY_LABELS: Record<string, string> = {
-  low: '↓', normal: '→', high: '↑', highest: '⬆',
+const PRIORITY_ICONS: Record<string, React.ElementType> = {
+  low: ArrowDown,
+  normal: ArrowRight,
+  high: ArrowUp,
+  highest: ChevronsUp,
 };
 
 function IssueRow({
@@ -227,9 +231,20 @@ function IssueRow({
       className={`w-full text-left px-3 py-2.5 border-b hover:bg-accent transition-colors ${selected ? 'bg-accent' : ''}`}
     >
       <div className="flex items-start gap-2">
-        <span className={`text-xs font-medium mt-0.5 shrink-0 ${PRIORITY_COLORS[issue.priority] ?? ''}`}>
-          {PRIORITY_LABELS[issue.priority]}
-        </span>
+        {(() => {
+          const Icon = PRIORITY_ICONS[issue.priority];
+          if (!Icon) return null;
+          return (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Icon className={`size-3.5 mt-0.5 shrink-0 ${PRIORITY_COLORS[issue.priority] ?? ''}`} />
+                </TooltipTrigger>
+                <TooltipContent>{issue.priority} priority</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          );
+        })()}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className="text-xs text-muted-foreground font-mono shrink-0">{issue.code}</span>
