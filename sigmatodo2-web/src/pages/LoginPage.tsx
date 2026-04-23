@@ -1,24 +1,46 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
-import { auth } from '@/lib/api';
+import { auth, isWakeupError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [serverMode, setServerMode] = useState<'dev' | 'prod' | null>(null);
+  const [serverMode, setServerMode] = useState<'dev' | 'prod' | 'waking' | 'error' | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
   const [formMode, setFormMode] = useState<'login' | 'register'>('login');
   const [form, setForm] = useState({ handle: '', displayName: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    auth.mode().then(r => setServerMode(r.mode)).catch(() => setServerMode('dev'));
-  }, []);
+    let cancelled = false;
+    let attempts = 0;
+
+    async function tryMode() {
+      try {
+        const r = await auth.mode();
+        if (!cancelled) setServerMode(r.mode);
+      } catch (err) {
+        if (cancelled) return;
+        if (isWakeupError(err) && attempts < 20) {
+          attempts++;
+          if (attempts === 1) setServerMode('waking');
+          setTimeout(tryMode, 3000);
+        } else {
+          if (!cancelled) setServerMode('error');
+        }
+      }
+    }
+
+    tryMode();
+    return () => { cancelled = true; };
+  }, [retryKey]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +61,27 @@ export default function LoginPage() {
 
   if (serverMode === null) {
     return <div className="flex items-center justify-center min-h-screen text-muted-foreground">Loading…</div>;
+  }
+
+  if (serverMode === 'waking') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-3 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <p className="text-sm">Waking up the server…</p>
+        <p className="text-xs opacity-60">Free tier cold start — usually takes about 30 seconds</p>
+      </div>
+    );
+  }
+
+  if (serverMode === 'error') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-3 text-muted-foreground">
+        <p className="text-sm text-destructive">Could not connect to the server.</p>
+        <Button variant="outline" size="sm" onClick={() => { setServerMode(null); setRetryKey(k => k + 1); }}>
+          Retry
+        </Button>
+      </div>
+    );
   }
 
   if (serverMode === 'prod') {

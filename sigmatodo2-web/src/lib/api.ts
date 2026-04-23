@@ -184,3 +184,9 @@ export const comments = {
 
   delete: (id: string) => request<void>(`/comments/${id}`, { method: 'DELETE' }),
 };
+
+export function isWakeupError(err: unknown): boolean {
+  if (err instanceof TypeError) return true;
+  if (err instanceof ApiError && err.status >= 502 && err.status <= 504) return true;
+  return false;
+}

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { User } from 'sigmatodo2-common';
-import { auth } from './api';
+import { auth, isWakeupError } from './api';
 
 interface AuthState {
   user: User | null;
@@ -48,12 +48,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setState(s => ({ ...s, isLoading: false }));
       return;
     }
-    auth.me()
-      .then(user => setState({ user, token, isLoading: false }))
-      .catch(() => {
-        localStorage.removeItem('token');
-        setState({ user: null, token: null, isLoading: false });
-      });
+
+    let cancelled = false;
+    let attempts = 0;
+
+    async function tryMe() {
+      try {
+        const user = await auth.me();
+        if (!cancelled) setState({ user, token, isLoading: false });
+      } catch (err) {
+        if (cancelled) return;
+        if (isWakeupError(err) && attempts < 20) {
+          attempts++;
+          setTimeout(tryMe, 3000);
+        } else {
+          localStorage.removeItem('token');
+          setState({ user: null, token: null, isLoading: false });
+        }
+      }
+    }
+
+    tryMe();
+    return () => { cancelled = true; };
   }, []);
 
   return (
