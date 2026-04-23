@@ -34,7 +34,7 @@ export default function ProjectPage() {
       <TopBar
         breadcrumbs={[
           { label: 'My Projects', href: '/' },
-          { label: code ?? '' },
+          { label: code ?? '', ...(selectedIssueCode ? { onClick: () => handleSelectIssue(null) } : {}) },
           ...(selectedIssueCode ? [{ label: selectedIssueCode }] : []),
         ]}
       />

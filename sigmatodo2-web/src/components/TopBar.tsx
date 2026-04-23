@@ -12,6 +12,7 @@ import { useDarkMode } from '@/lib/darkMode';
 interface Breadcrumb {
   label: string;
   href?: string;
+  onClick?: () => void;
 }
 
 interface TopBarProps {
@@ -33,6 +34,10 @@ export default function TopBar({ breadcrumbs = [] }: TopBarProps) {
               <Link to={crumb.href} className="text-muted-foreground hover:text-foreground truncate">
                 {crumb.label}
               </Link>
+            ) : crumb.onClick ? (
+              <button onClick={crumb.onClick} className="text-muted-foreground hover:text-foreground truncate cursor-pointer">
+                {crumb.label}
+              </button>
             ) : (
               <span className={`truncate ${i === breadcrumbs.length - 1 ? 'font-medium' : 'text-muted-foreground'}`}>
                 {crumb.label}
