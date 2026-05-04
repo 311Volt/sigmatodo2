@@ -22,6 +22,7 @@ const UpdateProjectSchema = z.object({
     name: z.string().min(1),
     bgColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
     importanceLevel: z.number().int().min(0),
+    isActive: z.boolean().default(false),
   })).optional().refine(defs => {
     if (!defs) return true;
     const codes = defs.map(d => d.code);

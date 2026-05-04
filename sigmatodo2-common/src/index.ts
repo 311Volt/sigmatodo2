@@ -12,13 +12,14 @@ export interface StatusDefinition {
   name: string;
   bgColor: string;
   importanceLevel: number;
+  isActive: boolean;
 }
 
 export const DEFAULT_STATUSES: StatusDefinition[] = [
-  { code: 'TODO', name: 'To Do', bgColor: '#6366f1', importanceLevel: 3 },
-  { code: 'INPROGRESS', name: 'In Progress', bgColor: '#f59e0b', importanceLevel: 4 },
-  { code: 'DONE', name: 'Done', bgColor: '#10b981', importanceLevel: 1 },
-  { code: 'WONTDO', name: "Won't Do", bgColor: '#6b7280', importanceLevel: 0 },
+  { code: 'TODO', name: 'To Do', bgColor: '#6366f1', importanceLevel: 3, isActive: true },
+  { code: 'INPROGRESS', name: 'In Progress', bgColor: '#f59e0b', importanceLevel: 4, isActive: true },
+  { code: 'DONE', name: 'Done', bgColor: '#10b981', importanceLevel: 1, isActive: false },
+  { code: 'WONTDO', name: "Won't Do", bgColor: '#6b7280', importanceLevel: 0, isActive: false },
 ];
 
 export interface User {

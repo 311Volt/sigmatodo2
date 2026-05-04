@@ -203,7 +203,7 @@ function ProjectSettingsDialog({
   });
 
   const addStatus = () => {
-    setStatusDefs(s => [...s, { code: `STATUS${s.length + 1}`, name: 'New Status', bgColor: '#6b7280', importanceLevel: 1 }]);
+    setStatusDefs(s => [...s, { code: `STATUS${s.length + 1}`, name: 'New Status', bgColor: '#6b7280', importanceLevel: 1, isActive: false }]);
   };
 
   const removeStatus = (code: string) => {
@@ -252,6 +252,13 @@ function ProjectSettingsDialog({
                   className="w-14 h-8 rounded-md border border-input bg-transparent px-2 text-xs"
                   title="Importance level"
                 />
+                <input
+                  type="checkbox"
+                  checked={s.isActive}
+                  onChange={e => setStatusDefs(ds => ds.map((d, j) => j === i ? { ...d, isActive: e.target.checked } : d))}
+                  className="size-4 shrink-0 cursor-pointer"
+                  title="Active status (counts toward open issues and shows deadlines)"
+                />
                 <Button
                   type="button"
                   variant="ghost"
@@ -264,7 +271,7 @@ function ProjectSettingsDialog({
                 </Button>
               </div>
             ))}
-            <p className="text-xs text-muted-foreground">Number = importance level (higher = more active in "Relevant" sort)</p>
+            <p className="text-xs text-muted-foreground">Number = importance level (higher = more active in "Relevant" sort) · Checkbox = active (counts toward open issues, shows deadlines)</p>
           </div>
 
           {error && <p className="text-destructive text-sm">{error}</p>}

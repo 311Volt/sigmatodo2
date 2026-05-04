@@ -63,8 +63,9 @@ export default function IssueList({
   });
 
   const statusMap = Object.fromEntries(statusDefinitions.map(s => [s.code, s]));
-  const myIssues = allIssues.filter(i => i.assignedTo === user?.handle);
-  const otherIssues = allIssues.filter(i => i.assignedTo !== user?.handle);
+  const myHandle = user?.handle ?? null;
+  const myIssues = allIssues.filter(i => i.assignedTo === myHandle);
+  const otherIssues = allIssues.filter(i => i.assignedTo !== myHandle);
 
   const defaultStatus = statusDefinitions[0]?.code ?? 'TODO';
 
@@ -100,6 +101,7 @@ export default function IssueList({
                 selectedCode={selectedCode}
                 onSelect={onSelect}
                 statusMap={statusMap}
+                myHandle={myHandle}
               />
             )}
             <IssueSection
@@ -108,6 +110,7 @@ export default function IssueList({
               selectedCode={selectedCode}
               onSelect={onSelect}
               statusMap={statusMap}
+              myHandle={myHandle}
             />
           </>
         )}
@@ -171,13 +174,14 @@ export default function IssueList({
 }
 
 function IssueSection({
-  title, issues, selectedCode, onSelect, statusMap,
+  title, issues, selectedCode, onSelect, statusMap, myHandle,
 }: {
   title?: string;
   issues: IssueWithAssignee[];
   selectedCode: string | null;
   onSelect: (code: string) => void;
-  statusMap: Record<string, { name: string; bgColor: string }>;
+  statusMap: Record<string, { name: string; bgColor: string; isActive: boolean }>;
+  myHandle: string | null;
 }) {
   if (issues.length === 0) return null;
   return (
@@ -194,6 +198,7 @@ function IssueSection({
           selected={issue.code === selectedCode}
           onSelect={() => onSelect(issue.code)}
           statusMap={statusMap}
+          myHandle={myHandle}
         />
       ))}
     </div>
@@ -215,15 +220,17 @@ const PRIORITY_ICONS: Record<string, React.ElementType> = {
 };
 
 function IssueRow({
-  issue, selected, onSelect, statusMap,
+  issue, selected, onSelect, statusMap, myHandle,
 }: {
   issue: IssueWithAssignee;
   selected: boolean;
   onSelect: () => void;
-  statusMap: Record<string, { name: string; bgColor: string }>;
+  statusMap: Record<string, { name: string; bgColor: string; isActive: boolean }>;
+  myHandle: string | null;
 }) {
-  const timeLeft = formatTimeLeft(issue.dueBy);
   const status = statusMap[issue.status];
+  const timeLeft = status?.isActive ? formatTimeLeft(issue.dueBy) : null;
+  const needsAttention = status?.isActive && issue.assignedTo === myHandle;
 
   return (
     <button
@@ -245,6 +252,9 @@ function IssueRow({
             </TooltipProvider>
           );
         })()}
+        {needsAttention && (
+          <span className="size-1.5 rounded-full bg-red-500 shrink-0 mt-1.5" />
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className="text-xs text-muted-foreground font-mono shrink-0">{issue.code}</span>

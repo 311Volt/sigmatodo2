@@ -10,7 +10,7 @@ function mapProject(row: typeof projects.$inferSelect): Project {
     name: row.name,
     backgroundImgPath: row.backgroundImgPath,
     description: row.description,
-    statusDefinitions: row.statusDefinitions,
+    statusDefinitions: row.statusDefinitions.map(s => ({ ...s, isActive: s.isActive ?? false })),
   };
 }
 
@@ -53,9 +53,9 @@ export async function getUserProjects(handle: string, myHandle: string): Promise
 
   return puRows.map(({ project, permissions }) => {
     const statusDefs = project.statusDefinitions;
-    const doneStatuses = new Set(statusDefs.filter(s => s.importanceLevel === 0).map(s => s.code));
+    const activeStatuses = new Set(statusDefs.filter(s => s.isActive).map(s => s.code));
     const projectIssues = allIssues.filter(i => i.projectCode === project.code);
-    const activeIssues = projectIssues.filter(i => !doneStatuses.has(i.status));
+    const activeIssues = projectIssues.filter(i => activeStatuses.has(i.status));
 
     return {
       ...mapProject(project),

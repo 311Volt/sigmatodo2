@@ -30,6 +30,8 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
   const { user } = useAuth();
   const qc = useQueryClient();
   const canEdit = project?.myPermissions?.editIssues ?? false;
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
   const [editingDesc, setEditingDesc] = useState(false);
   const [descDraft, setDescDraft] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
@@ -140,7 +142,35 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
               </span>
             )}
           </div>
-          <h2 className="text-lg font-semibold leading-snug">{issue.title}</h2>
+          {editingTitle ? (
+            <form
+              className="flex items-center gap-2 mt-1"
+              onSubmit={e => {
+                e.preventDefault();
+                if (titleDraft.trim()) update.mutate({ title: titleDraft.trim() });
+                setEditingTitle(false);
+              }}
+            >
+              <input
+                autoFocus
+                className="flex-1 min-w-0 text-lg font-semibold rounded-md border border-input bg-transparent px-2 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={titleDraft}
+                onChange={e => setTitleDraft(e.target.value)}
+                onBlur={() => {
+                  if (titleDraft.trim()) update.mutate({ title: titleDraft.trim() });
+                  setEditingTitle(false);
+                }}
+                onKeyDown={e => { if (e.key === 'Escape') setEditingTitle(false); }}
+              />
+            </form>
+          ) : (
+            <h2
+              className={`text-lg font-semibold leading-snug${canEdit ? ' cursor-pointer hover:text-muted-foreground' : ''}`}
+              onClick={canEdit ? () => { setTitleDraft(issue.title); setEditingTitle(true); } : undefined}
+            >
+              {issue.title}
+            </h2>
+          )}
         </div>
         <Button variant="ghost" size="icon" className="shrink-0" onClick={onClose}>
           <X className="size-4" />
