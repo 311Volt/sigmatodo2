@@ -111,11 +111,18 @@ export interface Comment {
 export interface Invitation {
   id: string;
   projectCode: string;
-  email: string;
+  invitationCode: string;
   invitedBy: string;
+  invitationFor: string | null;
   createdOn: string;
   acceptedOn: string | null;
+  expiresAt: string | null;
   permissions: PermissionsMap;
+}
+
+export interface InvitationDetails extends Invitation {
+  project: Project;
+  inviter: User;
 }
 
 export interface ProjectWithStats extends Project {

@@ -1,12 +1,7 @@
 import { useState, useRef } from 'react';
-
-const toLocalInputValue = (iso: string) => {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
+import { format } from 'date-fns';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Paperclip, Trash2, Pencil, Check } from 'lucide-react';
+import { X, Paperclip, Trash2, Pencil, Check, CalendarIcon } from 'lucide-react';
 import { issues as issuesApi, attachments as attachmentsApi, comments as commentsApi, projects as projectsApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatTimeLeft } from '@/lib/time';
@@ -18,6 +13,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { PermissionsMap } from 'sigmatodo2-common';
 
 interface IssueDetailsProps {
@@ -357,47 +354,10 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={!!issue.dueBy}
-                    onChange={e =>
-                      update.mutate({ dueBy: e.target.checked ? new Date().toISOString() : null })
-                    }
-                    className="size-3"
-                  />
-                  <p className="text-xs font-medium text-muted-foreground uppercase">Due date</p>
-                </label>
-                {issue.dueBy && (
-                  <>
-                    <input
-                      type="datetime-local"
-                      className="w-full h-8 rounded-md border border-input bg-transparent px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={toLocalInputValue(issue.dueBy)}
-                      onChange={e =>
-                        update.mutate({ dueBy: e.target.value ? new Date(e.target.value).toISOString() : null })
-                      }
-                    />
-                    <div className="flex flex-col gap-1 pt-0.5">
-                      {[
-                        { label: 'by 23:59 today', getDate: () => { const d = new Date(); d.setHours(23, 59, 0, 0); return d; } },
-                        { label: 'in 3 days',      getDate: () => { const d = new Date(); d.setDate(d.getDate() + 3); d.setHours(23, 59, 0, 0); return d; } },
-                        { label: 'in a week',      getDate: () => { const d = new Date(); d.setDate(d.getDate() + 7); d.setHours(23, 59, 0, 0); return d; } },
-                      ].map(({ label, getDate }) => (
-                        <button
-                          key={label}
-                          type="button"
-                          onClick={() => update.mutate({ dueBy: getDate().toISOString() })}
-                          className="text-left text-xs text-muted-foreground hover:text-foreground hover:underline"
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+              <DueDatePicker
+                dueBy={issue.dueBy}
+                onSet={iso => update.mutate({ dueBy: iso })}
+              />
             </>
           )}
           {!canEdit && issue.assignedTo && (
@@ -509,5 +469,62 @@ function NewCommentBox({ onSubmit }: { onSubmit: (content: string) => void }) {
       />
       <Button type="submit" size="sm" disabled={!value.trim()} className="self-end">Comment</Button>
     </form>
+  );
+}
+
+function DueDatePicker({ dueBy, onSet }: { dueBy: string | null; onSet: (iso: string | null) => void }) {
+  const [calOpen, setCalOpen] = useState(false);
+  const selected = dueBy ? new Date(dueBy) : undefined;
+
+  const setDate = (d: Date | undefined) => {
+    if (!d) return;
+    d.setHours(23, 59, 0, 0);
+    onSet(d.toISOString());
+    setCalOpen(false);
+  };
+
+  return (
+    <div className="space-y-1">
+      <label className="flex items-center gap-1.5 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={!!dueBy}
+          onChange={e => onSet(e.target.checked ? (() => { const d = new Date(); d.setHours(23, 59, 0, 0); return d.toISOString(); })() : null)}
+          className="size-3"
+        />
+        <p className="text-xs font-medium text-muted-foreground uppercase">Due date</p>
+      </label>
+      {dueBy && (
+        <>
+          <Popover open={calOpen} onOpenChange={setCalOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="w-full justify-start text-left font-normal h-8 text-xs">
+                <CalendarIcon className="size-3 mr-2 shrink-0" />
+                {format(new Date(dueBy), 'MMM d, yyyy')}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar mode="single" selected={selected} onSelect={setDate} />
+            </PopoverContent>
+          </Popover>
+          <div className="flex flex-col gap-1 pt-0.5">
+            {[
+              { label: 'by 23:59 today', getDate: () => { const d = new Date(); d.setHours(23, 59, 0, 0); return d; } },
+              { label: 'in 3 days',      getDate: () => { const d = new Date(); d.setDate(d.getDate() + 3); d.setHours(23, 59, 0, 0); return d; } },
+              { label: 'in a week',      getDate: () => { const d = new Date(); d.setDate(d.getDate() + 7); d.setHours(23, 59, 0, 0); return d; } },
+            ].map(({ label, getDate }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => onSet(getDate().toISOString())}
+                className="text-left text-xs text-muted-foreground hover:text-foreground hover:underline"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }

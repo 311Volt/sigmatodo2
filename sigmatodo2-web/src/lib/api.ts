@@ -1,6 +1,6 @@
 import type {
   User, Project, ProjectUser, Issue, IssueWithAssignee,
-  Attachment, Comment, Invitation, ProjectWithStats, SortOption,
+  Attachment, Comment, Invitation, InvitationDetails, ProjectWithStats, SortOption,
   StatusDefinition, PermissionsMap,
 } from 'sigmatodo2-common';
 
@@ -102,10 +102,10 @@ export const projects = {
 
   getMembers: (code: string) => request<ProjectUser[]>(`/projects/${code}/members`),
 
-  invite: (code: string, email: string, role: 'editor' | 'viewer' = 'editor') =>
-    request<{ added?: boolean; invited?: boolean; invitation?: Invitation }>(`/projects/${code}/members`, {
+  invite: (code: string, role: 'editor' | 'viewer' = 'editor', expiresAt?: string) =>
+    request<Invitation>(`/projects/${code}/members`, {
       method: 'POST',
-      body: JSON.stringify({ email, role }),
+      body: JSON.stringify({ role, expiresAt }),
     }),
 
   updateMember: (code: string, handle: string, role: 'editor' | 'viewer') =>
@@ -118,6 +118,13 @@ export const projects = {
     request<void>(`/projects/${code}/members/${handle}`, { method: 'DELETE' }),
 
   getInvitations: (code: string) => request<Invitation[]>(`/projects/${code}/invitations`),
+};
+
+// ── Invitations ───────────────────────────────────────────────────────────
+
+export const invitations = {
+  get: (code: string) => request<InvitationDetails>(`/invitations/${code}`),
+  accept: (code: string) => request<{ ok: boolean }>(`/invitations/${code}/accept`, { method: 'POST' }),
 };
 
 // ── Issues ────────────────────────────────────────────────────────────────

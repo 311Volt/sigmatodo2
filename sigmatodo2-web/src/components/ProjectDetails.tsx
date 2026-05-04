@@ -1,14 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings, UserPlus, Trash2 } from 'lucide-react';
+import { Settings, UserPlus, Trash2, Copy, Check, Link, CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
 import { projects as projectsApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import type { Project, PermissionsMap, StatusDefinition } from 'sigmatodo2-common';
+import type { Project, PermissionsMap, StatusDefinition, Invitation } from 'sigmatodo2-common';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Calendar } from '@/components/ui/calendar';
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from '@/components/ui/popover';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -27,22 +32,10 @@ export default function ProjectDetails({ project, projectCode }: ProjectDetailsP
   const canManage = project?.myPermissions?.changeProjectSettings ?? false;
   const [inviteOpen, setInviteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ email: '', role: 'editor' as 'editor' | 'viewer' });
-  const [inviteError, setInviteError] = useState('');
 
   const { data: members = [] } = useQuery({
     queryKey: ['members', projectCode],
     queryFn: () => projectsApi.getMembers(projectCode),
-  });
-
-  const invite = useMutation({
-    mutationFn: () => projectsApi.invite(projectCode, inviteForm.email, inviteForm.role),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['members', projectCode] });
-      setInviteOpen(false);
-      setInviteForm({ email: '', role: 'editor' });
-    },
-    onError: (err: Error) => setInviteError(err.message),
   });
 
   const removeMember = useMutation({
@@ -88,7 +81,7 @@ export default function ProjectDetails({ project, projectCode }: ProjectDetailsP
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-medium">Team</h3>
           {canManage && (
-            <Button variant="outline" size="sm" className="h-7" onClick={() => { setInviteOpen(true); setInviteError(''); }}>
+            <Button variant="outline" size="sm" className="h-7" onClick={() => setInviteOpen(true)}>
               <UserPlus className="size-3 mr-1" /> Invite
             </Button>
           )}
@@ -125,40 +118,15 @@ export default function ProjectDetails({ project, projectCode }: ProjectDetailsP
       </section>
 
       {/* Invite dialog */}
-      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Invite Member</DialogTitle></DialogHeader>
-          <form onSubmit={e => { e.preventDefault(); invite.mutate(); }} className="flex flex-col gap-4">
-            <div className="space-y-1">
-              <Label>Email</Label>
-              <Input
-                type="email"
-                placeholder="teammate@example.com"
-                value={inviteForm.email}
-                onChange={e => setInviteForm(f => ({ ...f, email: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Role</Label>
-              <Select value={inviteForm.role} onValueChange={v => setInviteForm(f => ({ ...f, role: v as 'editor' | 'viewer' }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="editor">Editor (can edit issues)</SelectItem>
-                  <SelectItem value="viewer">Viewer (read-only)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {inviteError && <p className="text-destructive text-sm">{inviteError}</p>}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={invite.isPending}>
-                {invite.isPending ? 'Inviting…' : 'Send invite'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {canManage && user && (
+        <InviteDialog
+          projectCode={projectCode}
+          open={inviteOpen}
+          onOpenChange={setInviteOpen}
+          myHandle={user.handle}
+          onSuccess={() => qc.invalidateQueries({ queryKey: ['members', projectCode] })}
+        />
+      )}
 
       {/* Settings dialog */}
       {canManage && (
@@ -173,6 +141,157 @@ export default function ProjectDetails({ project, projectCode }: ProjectDetailsP
   );
 }
 
+function InviteDialog({
+  projectCode, open, onOpenChange, myHandle, onSuccess,
+}: {
+  projectCode: string;
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  myHandle: string;
+  onSuccess: () => void;
+}) {
+  const [role, setRole] = useState<'editor' | 'viewer'>('editor');
+  const [expiresAt, setExpiresAt] = useState<Date | undefined>(undefined);
+  const [calOpen, setCalOpen] = useState(false);
+  const [invitation, setInvitation] = useState<Invitation | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const { data: existingInvitations, isLoading } = useQuery({
+    queryKey: ['invitations', projectCode],
+    queryFn: () => projectsApi.getInvitations(projectCode),
+    enabled: open,
+  });
+
+  // Pre-populate from existing active invitation from me
+  useEffect(() => {
+    if (!existingInvitations || invitation) return;
+    const active = existingInvitations.find(inv =>
+      inv.invitedBy === myHandle &&
+      !inv.acceptedOn &&
+      inv.invitationFor === null &&
+      (!inv.expiresAt || new Date(inv.expiresAt) > new Date()),
+    );
+    if (active) {
+      setInvitation(active);
+      setExpiresAt(active.expiresAt ? new Date(active.expiresAt) : undefined);
+    }
+  }, [existingInvitations, myHandle, invitation]);
+
+  // Reset on close
+  useEffect(() => {
+    if (!open) {
+      setInvitation(null);
+      setExpiresAt(undefined);
+      setCopied(false);
+    }
+  }, [open]);
+
+  const generate = useMutation({
+    mutationFn: () => projectsApi.invite(projectCode, role, expiresAt?.toISOString()),
+    onSuccess: (inv) => {
+      setInvitation(inv);
+      onSuccess();
+    },
+  });
+
+  const inviteLink = invitation
+    ? `${window.location.origin}/invite/${invitation.invitationCode}`
+    : '';
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(inviteLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Invite to Project</DialogTitle></DialogHeader>
+        <div className="flex flex-col gap-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+              Loading…
+            </div>
+          ) : (
+            <>
+              <div className="flex gap-3">
+                <div className="flex-1 space-y-1">
+                  <Label>Role</Label>
+                  <Select value={role} onValueChange={v => { setRole(v as 'editor' | 'viewer'); setInvitation(null); }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="editor">Editor (can edit issues)</SelectItem>
+                      <SelectItem value="viewer">Viewer (read-only)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1 space-y-1">
+                  <Label>Expires</Label>
+                  <Popover open={calOpen} onOpenChange={setCalOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start text-left font-normal h-9 text-sm">
+                        <CalendarIcon className="size-3.5 mr-2 shrink-0" />
+                        {expiresAt ? format(expiresAt, 'MMM d, yyyy') : <span className="text-muted-foreground">Never</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <div className="p-2 border-b">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start text-xs"
+                          onClick={() => { setExpiresAt(undefined); setCalOpen(false); setInvitation(null); }}
+                        >
+                          No expiration
+                        </Button>
+                      </div>
+                      <Calendar
+                        mode="single"
+                        selected={expiresAt}
+                        onSelect={d => { setExpiresAt(d); setCalOpen(false); setInvitation(null); }}
+                        disabled={d => d < new Date()}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+
+              {invitation ? (
+                <div className="space-y-2">
+                  <Label>Invitation Link</Label>
+                  <div className="flex gap-2">
+                    <div className="flex-1 flex items-center gap-2 rounded-md border border-input bg-muted px-3 py-2 text-xs font-mono truncate text-muted-foreground">
+                      <Link className="size-3 shrink-0" />
+                      <span className="truncate">{inviteLink}</span>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={copyLink} className="shrink-0">
+                      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                    </Button>
+                  </div>
+                  {expiresAt && (
+                    <p className="text-xs text-muted-foreground">
+                      Expires {format(expiresAt, 'MMMM d, yyyy')}
+                    </p>
+                  )}
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          {!isLoading && (
+            <Button onClick={() => generate.mutate()} disabled={generate.isPending}>
+              {generate.isPending ? 'Generating…' : invitation ? 'Regenerate Link' : 'Generate Link'}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ProjectSettingsDialog({
   project, open, onOpenChange, onSave,
 }: {
@@ -181,7 +300,6 @@ function ProjectSettingsDialog({
   onOpenChange: (o: boolean) => void;
   onSave: () => void;
 }) {
-  const qc = useQueryClient();
   const [form, setForm] = useState({
     name: project.name,
     description: project.description ?? '',

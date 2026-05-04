@@ -9,6 +9,7 @@ import ProjectPage from '@/pages/ProjectPage';
 import ProfilePage from '@/pages/ProfilePage';
 import EditProfilePage from '@/pages/EditProfilePage';
 import AuthCallbackPage from '@/pages/AuthCallbackPage';
+import InvitePage from '@/pages/InvitePage';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -38,6 +39,7 @@ function AppRoutes() {
       <Route path="/projects/:code/issues/:issueCode" element={<ProtectedRoute><ProjectPage /></ProtectedRoute>} />
       <Route path="/profile/:handle" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
       <Route path="/profile/:handle/edit" element={<ProtectedRoute><EditProfilePage /></ProtectedRoute>} />
+      <Route path="/invite/:invitationCode" element={<InvitePage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

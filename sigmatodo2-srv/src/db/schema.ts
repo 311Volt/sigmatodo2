@@ -67,10 +67,12 @@ export const comments = pgTable('comments', {
 export const invitations = pgTable('invitations', {
   id: uuid('id').primaryKey().defaultRandom(),
   projectCode: text('project_code').notNull().references(() => projects.code, { onDelete: 'cascade' }),
-  email: text('email').notNull(),
+  invitationCode: uuid('invitation_code').notNull().unique().defaultRandom(),
   invitedBy: text('invited_by').notNull().references(() => users.handle),
+  invitationFor: text('invitation_for').references(() => users.handle, { onDelete: 'set null' }),
   createdOn: timestamp('created_on').defaultNow().notNull(),
   acceptedOn: timestamp('accepted_on'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
   permissions: jsonb('permissions').$type<PermissionsMap>().notNull(),
 });
 
@@ -79,6 +81,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   assignedIssues: many(issues, { relationName: 'issue_assignee' }),
   createdIssues: many(issues, { relationName: 'issue_creator' }),
   comments: many(comments),
+  sentInvitations: many(invitations, { relationName: 'invitation_inviter' }),
+  targetedInvitations: many(invitations, { relationName: 'invitation_for_user' }),
 }));
 
 export const projectsRelations = relations(projects, ({ many }) => ({
@@ -115,5 +119,6 @@ export const commentsRelations = relations(comments, ({ one }) => ({
 
 export const invitationsRelations = relations(invitations, ({ one }) => ({
   project: one(projects, { fields: [invitations.projectCode], references: [projects.code] }),
-  inviter: one(users, { fields: [invitations.invitedBy], references: [users.handle] }),
+  inviter: one(users, { fields: [invitations.invitedBy], references: [users.handle], relationName: 'invitation_inviter' }),
+  invitationForUser: one(users, { fields: [invitations.invitationFor], references: [users.handle], relationName: 'invitation_for_user' }),
 }));

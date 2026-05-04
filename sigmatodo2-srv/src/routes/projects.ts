@@ -5,7 +5,6 @@ import { getStorage } from '../storage/index';
 import { MEMBER_PERMISSIONS, VIEWER_PERMISSIONS } from 'sigmatodo2-common';
 import * as projectRepo from '../repositories/projectRepo';
 import * as invitationRepo from '../repositories/invitationRepo';
-import * as userRepo from '../repositories/userRepo';
 import * as projectService from '../services/projectService';
 
 const CreateProjectSchema = z.object({
@@ -31,8 +30,8 @@ const UpdateProjectSchema = z.object({
 });
 
 const InviteSchema = z.object({
-  email: z.string().email(),
   role: z.enum(['editor', 'viewer']).default('editor'),
+  expiresAt: z.string().datetime().optional(),
 });
 
 const UpdateMemberSchema = z.object({
@@ -157,21 +156,14 @@ export async function projectRoutes(app: FastifyInstance) {
 
     const permissions = body.data.role === 'viewer' ? VIEWER_PERMISSIONS : MEMBER_PERMISSIONS;
 
-    const existingUser = await userRepo.getUserByEmail(body.data.email);
-    if (existingUser) {
-      const alreadyMember = await projectRepo.getProjectUser(existingUser.handle, code);
-      if (alreadyMember) return reply.status(409).send({ error: 'User is already a member' });
-      await projectRepo.addProjectUser({ userHandle: existingUser.handle, projectCode: code, permissions });
-      return reply.status(201).send({ added: true });
-    }
-
     const invitation = await invitationRepo.createInvitation({
       projectCode: code,
-      email: body.data.email,
       invitedBy: me,
+      invitationFor: null,
+      expiresAt: body.data.expiresAt ?? null,
       permissions,
     });
-    return reply.status(201).send({ invited: true, invitation });
+    return reply.status(201).send(invitation);
   });
 
   app.patch('/api/projects/:code/members/:handle', { onRequest: [app.authenticate] }, async (req, reply) => {

@@ -1,5 +1,4 @@
 import * as userRepo from '../repositories/userRepo';
-import * as invitationRepo from '../repositories/invitationRepo';
 import type { User } from 'sigmatodo2-common';
 
 export async function handleGoogleUser(profile: {
@@ -19,11 +18,6 @@ export async function handleGoogleUser(profile: {
       email: profile.email,
       avatarPath: profile.picture,
     });
-
-    const pending = await invitationRepo.getPendingInvitationsByEmail(profile.email);
-    for (const inv of pending) {
-      await invitationRepo.acceptInvitation(inv.id, user.handle);
-    }
   }
 
   return { user, isNew };
