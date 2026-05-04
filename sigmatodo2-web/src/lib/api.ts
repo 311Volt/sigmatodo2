@@ -102,10 +102,10 @@ export const projects = {
 
   getMembers: (code: string) => request<ProjectUser[]>(`/projects/${code}/members`),
 
-  invite: (code: string, role: 'editor' | 'viewer' = 'editor', expiresAt?: string) =>
+  invite: (code: string, role: 'editor' | 'viewer' = 'editor', expiresAt?: string, singleUse = false) =>
     request<Invitation>(`/projects/${code}/members`, {
       method: 'POST',
-      body: JSON.stringify({ role, expiresAt }),
+      body: JSON.stringify({ role, expiresAt, singleUse }),
     }),
 
   updateMember: (code: string, handle: string, role: 'editor' | 'viewer') =>

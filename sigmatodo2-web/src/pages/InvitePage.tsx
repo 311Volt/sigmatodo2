@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { invitations as invitationsApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { useDarkMode } from '@/lib/darkMode';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 
@@ -9,6 +10,7 @@ export default function InvitePage() {
   const { invitationCode } = useParams<{ invitationCode: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  useDarkMode();
 
   const { data: details, isLoading, error } = useQuery({
     queryKey: ['invitation', invitationCode],

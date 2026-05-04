@@ -32,6 +32,7 @@ const UpdateProjectSchema = z.object({
 const InviteSchema = z.object({
   role: z.enum(['editor', 'viewer']).default('editor'),
   expiresAt: z.string().datetime().optional(),
+  singleUse: z.boolean().default(false),
 });
 
 const UpdateMemberSchema = z.object({
@@ -162,6 +163,7 @@ export async function projectRoutes(app: FastifyInstance) {
       invitationFor: null,
       expiresAt: body.data.expiresAt ?? null,
       permissions,
+      singleUse: body.data.singleUse,
     });
     return reply.status(201).send(invitation);
   });

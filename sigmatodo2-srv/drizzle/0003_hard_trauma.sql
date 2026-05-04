@@ -1,0 +1,1 @@
+ALTER TABLE "invitations" ADD COLUMN "single_use" boolean DEFAULT true NOT NULL;

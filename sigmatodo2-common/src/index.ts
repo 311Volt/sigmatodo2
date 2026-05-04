@@ -118,6 +118,7 @@ export interface Invitation {
   acceptedOn: string | null;
   expiresAt: string | null;
   permissions: PermissionsMap;
+  singleUse: boolean;
 }
 
 export interface InvitationDetails extends Invitation {

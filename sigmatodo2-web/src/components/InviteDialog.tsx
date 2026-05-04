@@ -6,6 +6,7 @@ import { projects as projectsApi } from '@/lib/api';
 import type { Invitation } from 'sigmatodo2-common';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { DatePicker } from '@/components/ui/datepicker';
 import { TimePicker } from '@/components/ui/timepicker';
 import {
@@ -27,6 +28,7 @@ export function InviteDialog({
   projectCode, open, onOpenChange, myHandle, onSuccess,
 }: InviteDialogProps) {
   const [role, setRole] = useState<'editor' | 'viewer'>('editor');
+  const [singleUse, setSingleUse] = useState(false);
   const [expiresAt, setExpiresAt] = useState<Date | undefined>(undefined);
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [copied, setCopied] = useState(false);
@@ -51,6 +53,7 @@ export function InviteDialog({
     if (active) {
       setInvitation(active);
       setExpiresAt(active.expiresAt ? new Date(active.expiresAt) : undefined);
+      setSingleUse(active.singleUse);
     }
   }, [existingInvitations, myHandle]);
 
@@ -59,13 +62,14 @@ export function InviteDialog({
     if (!open) {
       setInvitation(null);
       setExpiresAt(undefined);
+      setSingleUse(false);
       setCopied(false);
       hasPopulated.current = false;
     }
   }, [open]);
 
   const generate = useMutation({
-    mutationFn: () => projectsApi.invite(projectCode, role, expiresAt?.toISOString()),
+    mutationFn: () => projectsApi.invite(projectCode, role, expiresAt?.toISOString(), singleUse),
     onSuccess: (inv) => {
       setInvitation(inv);
       onSuccess();
@@ -134,6 +138,17 @@ export function InviteDialog({
                     />
                   )}
                 </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Switch
+                  id="single-use"
+                  checked={singleUse}
+                  onCheckedChange={v => { setSingleUse(v); setInvitation(null); }}
+                />
+                <Label htmlFor="single-use" className="cursor-pointer select-none">
+                  Single-use (link expires after first accept)
+                </Label>
               </div>
 
               {invitation ? (

@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, jsonb, uuid, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, timestamp, jsonb, uuid, primaryKey, boolean } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import type { StatusDefinition, PermissionsMap } from 'sigmatodo2-common';
 
@@ -74,6 +74,7 @@ export const invitations = pgTable('invitations', {
   acceptedOn: timestamp('accepted_on'),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
   permissions: jsonb('permissions').$type<PermissionsMap>().notNull(),
+  singleUse: boolean('single_use').notNull().default(true),
 });
 
 export const usersRelations = relations(users, ({ many }) => ({

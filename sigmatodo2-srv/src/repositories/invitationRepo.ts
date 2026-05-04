@@ -16,6 +16,7 @@ function mapInvitation(row: InvitationRow): Invitation {
     acceptedOn: row.acceptedOn?.toISOString() ?? null,
     expiresAt: row.expiresAt?.toISOString() ?? null,
     permissions: row.permissions,
+    singleUse: row.singleUse,
   };
 }
 
@@ -66,6 +67,7 @@ export async function createInvitation(params: {
   invitationFor: string | null;
   expiresAt: string | null;
   permissions: PermissionsMap;
+  singleUse: boolean;
 }): Promise<Invitation> {
   const expiresAtDate = params.expiresAt ? new Date(params.expiresAt) : null;
 
@@ -81,6 +83,7 @@ export async function createInvitation(params: {
       expiresAtDate
         ? eq(invitations.expiresAt, expiresAtDate)
         : isNull(invitations.expiresAt),
+      eq(invitations.singleUse, params.singleUse),
     ),
   });
   if (existing) return mapInvitation(existing);
@@ -91,6 +94,7 @@ export async function createInvitation(params: {
     invitationFor: params.invitationFor,
     expiresAt: expiresAtDate,
     permissions: params.permissions,
+    singleUse: params.singleUse,
   }).returning();
   return mapInvitation(row);
 }
@@ -101,14 +105,16 @@ export async function acceptInvitation(
 ): Promise<{ ok: boolean; error?: string }> {
   const inv = await getInvitationByCode(invitationCode);
   if (!inv) return { ok: false, error: 'Invitation not found' };
-  if (inv.acceptedOn) return { ok: false, error: 'Invitation already used' };
+  if (inv.singleUse && inv.acceptedOn) return { ok: false, error: 'Invitation already used' };
   if (inv.expiresAt && new Date(inv.expiresAt) < new Date()) return { ok: false, error: 'Invitation expired' };
   if (inv.invitationFor && inv.invitationFor !== userHandle) return { ok: false, error: 'Invitation not for you' };
 
   await db.transaction(async (tx) => {
-    await tx.update(invitations)
-      .set({ acceptedOn: new Date() })
-      .where(eq(invitations.invitationCode, invitationCode));
+    if (inv.singleUse) {
+      await tx.update(invitations)
+        .set({ acceptedOn: new Date() })
+        .where(eq(invitations.invitationCode, invitationCode));
+    }
     await tx.insert(projectUsers).values({
       userHandle,
       projectCode: inv.projectCode,
