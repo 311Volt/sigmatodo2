@@ -3,14 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Settings, UserPlus, Trash2 } from 'lucide-react';
 import { projects as projectsApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import type { Project, PermissionsMap, StatusDefinition } from 'sigmatodo2-common';
+import type { Project, PermissionsMap } from 'sigmatodo2-common';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { InviteDialog } from '@/components/InviteDialog';
+import { ProjectSettingsDialog } from '@/components/ProjectSettingsDialog';
 
 interface ProjectDetailsProps {
   project?: (Project & { myPermissions?: PermissionsMap }) | null;
@@ -132,115 +130,3 @@ export default function ProjectDetails({ project, projectCode }: ProjectDetailsP
   );
 }
 
-function ProjectSettingsDialog({
-  project, open, onOpenChange, onSave,
-}: {
-  project: Project;
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  onSave: () => void;
-}) {
-  const [form, setForm] = useState({
-    name: project.name,
-    description: project.description ?? '',
-  });
-  const [statusDefs, setStatusDefs] = useState<StatusDefinition[]>(project.statusDefinitions);
-  const [error, setError] = useState('');
-
-  const update = useMutation({
-    mutationFn: () => projectsApi.update(project.code, {
-      name: form.name,
-      description: form.description || null,
-      statusDefinitions: statusDefs,
-    }),
-    onSuccess: () => {
-      onSave();
-      onOpenChange(false);
-    },
-    onError: (err: Error) => setError(err.message),
-  });
-
-  const addStatus = () => {
-    setStatusDefs(s => [...s, { code: `STATUS${s.length + 1}`, name: 'New Status', bgColor: '#6b7280', importanceLevel: 1, isActive: false }]);
-  };
-
-  const removeStatus = (code: string) => {
-    if (code === 'TODO' || code === 'DONE') return;
-    setStatusDefs(s => s.filter(d => d.code !== code));
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Project Settings</DialogTitle></DialogHeader>
-        <form onSubmit={e => { e.preventDefault(); update.mutate(); }} className="flex flex-col gap-4">
-          <div className="space-y-1">
-            <Label>Name</Label>
-            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
-          </div>
-          <div className="space-y-1">
-            <Label>Description</Label>
-            <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Statuses</Label>
-              <Button type="button" variant="outline" size="sm" className="h-7" onClick={addStatus}>Add</Button>
-            </div>
-            {statusDefs.map((s, i) => (
-              <div key={s.code} className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={s.bgColor}
-                  onChange={e => setStatusDefs(ds => ds.map((d, j) => j === i ? { ...d, bgColor: e.target.value } : d))}
-                  className="w-8 h-8 rounded border cursor-pointer p-0.5"
-                />
-                <Input
-                  value={s.name}
-                  onChange={e => setStatusDefs(ds => ds.map((d, j) => j === i ? { ...d, name: e.target.value } : d))}
-                  className="flex-1 h-8 text-xs"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  max={10}
-                  value={s.importanceLevel}
-                  onChange={e => setStatusDefs(ds => ds.map((d, j) => j === i ? { ...d, importanceLevel: parseInt(e.target.value) } : d))}
-                  className="w-14 h-8 rounded-md border border-input bg-transparent px-2 text-xs"
-                  title="Importance level"
-                />
-                <input
-                  type="checkbox"
-                  checked={s.isActive}
-                  onChange={e => setStatusDefs(ds => ds.map((d, j) => j === i ? { ...d, isActive: e.target.checked } : d))}
-                  className="size-4 shrink-0 cursor-pointer"
-                  title="Active status (counts toward open issues and shows deadlines)"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 shrink-0 text-destructive"
-                  onClick={() => removeStatus(s.code)}
-                  disabled={s.code === 'TODO' || s.code === 'DONE'}
-                >
-                  <Trash2 className="size-3" />
-                </Button>
-              </div>
-            ))}
-            <p className="text-xs text-muted-foreground">Number = importance level (higher = more active in "Relevant" sort) · Checkbox = active (counts toward open issues, shows deadlines)</p>
-          </div>
-
-          {error && <p className="text-destructive text-sm">{error}</p>}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={update.isPending}>
-              {update.isPending ? 'Saving…' : 'Save'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
