@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth';
 import { formatTimeLeft } from '@/lib/time';
 import type { IssueWithAssignee, SortOption, StatusDefinition } from 'sigmatodo2-common';
 import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -87,7 +88,7 @@ export default function IssueList({
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <ScrollArea className="flex-1 min-h-0">
         {isLoading ? (
           <div className="text-center text-muted-foreground text-sm py-8">Loading…</div>
         ) : allIssues.length === 0 ? (
@@ -114,7 +115,7 @@ export default function IssueList({
             />
           </>
         )}
-      </div>
+      </ScrollArea>
 
       <Dialog open={newOpen} onOpenChange={setNewOpen}>
         <DialogContent>

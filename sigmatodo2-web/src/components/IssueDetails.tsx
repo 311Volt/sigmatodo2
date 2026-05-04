@@ -1,7 +1,6 @@
 import { useState, useRef } from 'react';
-import { format } from 'date-fns';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Paperclip, Trash2, Pencil, Check, CalendarIcon } from 'lucide-react';
+import { X, Paperclip, Trash2, Pencil, Check } from 'lucide-react';
 import { issues as issuesApi, attachments as attachmentsApi, comments as commentsApi, projects as projectsApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatTimeLeft } from '@/lib/time';
@@ -9,12 +8,14 @@ import type { Project, Comment, IssueWithAssignee } from 'sigmatodo2-common';
 import MarkdownEditor from '@/components/MarkdownEditor';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { DatePicker } from '@/components/ui/datepicker';
+import { TimePicker } from '@/components/ui/timepicker';
+import { Checkbox } from '@/components/ui/checkbox';
 import type { PermissionsMap } from 'sigmatodo2-common';
 
 interface IssueDetailsProps {
@@ -183,7 +184,8 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
 
       <div className="flex flex-1 overflow-hidden">
         {/* Main content */}
-        <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-6">
+        <ScrollArea className="flex-1 min-h-0">
+        <div className="p-5 flex flex-col gap-6">
           {/* Description */}
           <section>
             <div className="flex items-center justify-between mb-2">
@@ -298,9 +300,11 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
             />
           </section>
         </div>
+        </ScrollArea>
 
         {/* Sidebar */}
-        <aside className="w-48 border-l p-4 flex flex-col gap-4 text-sm shrink-0">
+        <ScrollArea className="w-48 border-l shrink-0">
+        <aside className="p-4 flex flex-col gap-4 text-sm">
           {canEdit && (
             <>
               <div className="space-y-1">
@@ -389,6 +393,7 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
             </div>
           </div>
         </aside>
+        </ScrollArea>
       </div>
     </div>
   );
@@ -473,40 +478,43 @@ function NewCommentBox({ onSubmit }: { onSubmit: (content: string) => void }) {
 }
 
 function DueDatePicker({ dueBy, onSet }: { dueBy: string | null; onSet: (iso: string | null) => void }) {
-  const [calOpen, setCalOpen] = useState(false);
   const selected = dueBy ? new Date(dueBy) : undefined;
+  const timeValue = dueBy
+    ? `${String(new Date(dueBy).getHours()).padStart(2, '0')}:${String(new Date(dueBy).getMinutes()).padStart(2, '0')}`
+    : '23:59';
 
   const setDate = (d: Date | undefined) => {
     if (!d) return;
-    d.setHours(23, 59, 0, 0);
+    if (dueBy) {
+      const prev = new Date(dueBy);
+      d.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+    } else {
+      d.setHours(23, 59, 0, 0);
+    }
     onSet(d.toISOString());
-    setCalOpen(false);
+  };
+
+  const setTime = (timeStr: string) => {
+    if (!dueBy) return;
+    const [h, m] = timeStr.split(':').map(Number);
+    const d = new Date(dueBy);
+    d.setHours(h, m, 0, 0);
+    onSet(d.toISOString());
   };
 
   return (
     <div className="space-y-1">
       <label className="flex items-center gap-1.5 cursor-pointer">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={!!dueBy}
-          onChange={e => onSet(e.target.checked ? (() => { const d = new Date(); d.setHours(23, 59, 0, 0); return d.toISOString(); })() : null)}
-          className="size-3"
+          onCheckedChange={checked => onSet(checked ? (() => { const d = new Date(); d.setHours(23, 59, 0, 0); return d.toISOString(); })() : null)}
         />
         <p className="text-xs font-medium text-muted-foreground uppercase">Due date</p>
       </label>
       {dueBy && (
         <>
-          <Popover open={calOpen} onOpenChange={setCalOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="w-full justify-start text-left font-normal h-8 text-xs">
-                <CalendarIcon className="size-3 mr-2 shrink-0" />
-                {format(new Date(dueBy), 'MMM d, yyyy')}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar mode="single" selected={selected} onSelect={setDate} />
-            </PopoverContent>
-          </Popover>
+          <DatePicker value={selected} onChange={setDate} className="h-8 text-xs" />
+          <TimePicker value={timeValue} onChange={setTime} step={5} />
           <div className="flex flex-col gap-1 pt-0.5">
             {[
               { label: 'by 23:59 today', getDate: () => { const d = new Date(); d.setHours(23, 59, 0, 0); return d; } },
