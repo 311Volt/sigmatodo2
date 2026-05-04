@@ -1,9 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { getDB } from '../db/index';
-import { getStorage } from '../storage/index';
 import { IS_PROD } from '../config';
+import { getStorage } from '../storage/index';
 import { MEMBER_PERMISSIONS, VIEWER_PERMISSIONS } from 'sigmatodo2-common';
+import * as projectRepo from '../repositories/projectRepo';
+import * as invitationRepo from '../repositories/invitationRepo';
+import * as userRepo from '../repositories/userRepo';
+import * as projectService from '../services/projectService';
 
 const CreateProjectSchema = z.object({
   code: z.string().min(2).max(8).regex(/^[A-Z0-9]+$/, 'Project code must be uppercase letters/numbers'),
@@ -35,16 +38,10 @@ const UpdateMemberSchema = z.object({
   role: z.enum(['editor', 'viewer']),
 });
 
-async function callDB(db: ReturnType<typeof getDB>, method: string, ...args: unknown[]): Promise<unknown> {
-  const fn = (db as Record<string, (...a: unknown[]) => unknown>)[method];
-  return fn?.call(db, ...args);
-}
-
 export async function projectRoutes(app: FastifyInstance) {
   app.get('/api/projects', { onRequest: [app.authenticate] }, async (req, reply) => {
     const me = (req.user as { handle: string }).handle;
-    const db = getDB();
-    const projects = await callDB(db, 'getUserProjects', me, me);
+    const projects = await projectRepo.getUserProjects(me, me);
     return reply.send(projects);
   });
 
@@ -53,59 +50,53 @@ export async function projectRoutes(app: FastifyInstance) {
     const body = CreateProjectSchema.safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: body.error.issues[0]?.message });
 
-    const db = getDB();
-    const exists = await callDB(db, 'projectCodeExists', body.data.code);
-    if (exists) return reply.status(409).send({ error: 'Project code already in use' });
+    if (await projectRepo.projectCodeExists(body.data.code)) {
+      return reply.status(409).send({ error: 'Project code already in use' });
+    }
 
-    const project = await callDB(db, 'createProject', {
-      ...body.data,
-      ownerHandle: me,
-    });
+    const project = await projectService.createProject({ ...body.data, ownerHandle: me });
     return reply.status(201).send(project);
   });
 
   app.get('/api/projects/:code', { onRequest: [app.authenticate] }, async (req, reply) => {
     const { code } = req.params as { code: string };
     const me = (req.user as { handle: string }).handle;
-    const db = getDB();
 
-    const member = await callDB(db, 'getProjectUser', me, code);
+    const member = await projectRepo.getProjectUser(me, code);
     if (!member) return reply.status(403).send({ error: 'Access denied' });
 
-    const project = await callDB(db, 'getProjectByCode', code);
+    const project = await projectRepo.getProjectByCode(code);
     if (!project) return reply.status(404).send({ error: 'Project not found' });
 
-    return reply.send({ ...project, myPermissions: (member as { permissions: unknown }).permissions });
+    return reply.send({ ...project, myPermissions: member.permissions });
   });
 
   app.patch('/api/projects/:code', { onRequest: [app.authenticate] }, async (req, reply) => {
     const { code } = req.params as { code: string };
     const me = (req.user as { handle: string }).handle;
-    const db = getDB();
 
-    const member = await callDB(db, 'getProjectUser', me, code);
-    if (!member || !(member as { permissions: { changeProjectSettings: boolean } }).permissions.changeProjectSettings) {
+    const member = await projectRepo.getProjectUser(me, code);
+    if (!member?.permissions.changeProjectSettings) {
       return reply.status(403).send({ error: 'Insufficient permissions' });
     }
 
     const body = UpdateProjectSchema.safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: body.error.issues[0]?.message });
 
-    const project = await callDB(db, 'updateProject', code, body.data);
+    const project = await projectRepo.updateProject(code, body.data);
     return reply.send(project);
   });
 
   app.delete('/api/projects/:code', { onRequest: [app.authenticate] }, async (req, reply) => {
     const { code } = req.params as { code: string };
     const me = (req.user as { handle: string }).handle;
-    const db = getDB();
 
-    const member = await callDB(db, 'getProjectUser', me, code);
-    if (!member || !(member as { permissions: { changeProjectSettings: boolean } }).permissions.changeProjectSettings) {
+    const member = await projectRepo.getProjectUser(me, code);
+    if (!member?.permissions.changeProjectSettings) {
       return reply.status(403).send({ error: 'Insufficient permissions' });
     }
 
-    await callDB(db, 'deleteProject', code);
+    await projectRepo.deleteProject(code);
     return reply.status(204).send();
   });
 
@@ -114,10 +105,9 @@ export async function projectRoutes(app: FastifyInstance) {
   app.post('/api/projects/:code/background', { onRequest: [app.authenticate] }, async (req, reply) => {
     const { code } = req.params as { code: string };
     const me = (req.user as { handle: string }).handle;
-    const db = getDB();
 
-    const member = await callDB(db, 'getProjectUser', me, code);
-    if (!member || !(member as { permissions: { changeProjectSettings: boolean } }).permissions.changeProjectSettings) {
+    const member = await projectRepo.getProjectUser(me, code);
+    if (!member?.permissions.changeProjectSettings) {
       return reply.status(403).send({ error: 'Insufficient permissions' });
     }
 
@@ -135,7 +125,7 @@ export async function projectRoutes(app: FastifyInstance) {
       bgPath = await (storage as import('../storage/filesystem').FilesystemStorage).saveProjectBackground(code, buf, mimeType);
     }
 
-    const project = await callDB(db, 'updateProject', code, { backgroundImgPath: bgPath });
+    const project = await projectRepo.updateProject(code, { backgroundImgPath: bgPath });
     return reply.send(project);
   });
 
@@ -144,22 +134,20 @@ export async function projectRoutes(app: FastifyInstance) {
   app.get('/api/projects/:code/members', { onRequest: [app.authenticate] }, async (req, reply) => {
     const { code } = req.params as { code: string };
     const me = (req.user as { handle: string }).handle;
-    const db = getDB();
 
-    const member = await callDB(db, 'getProjectUser', me, code);
+    const member = await projectRepo.getProjectUser(me, code);
     if (!member) return reply.status(403).send({ error: 'Access denied' });
 
-    const members = await callDB(db, 'getProjectMembers', code);
+    const members = await projectRepo.getProjectMembers(code);
     return reply.send(members);
   });
 
   app.post('/api/projects/:code/members', { onRequest: [app.authenticate] }, async (req, reply) => {
     const { code } = req.params as { code: string };
     const me = (req.user as { handle: string }).handle;
-    const db = getDB();
 
-    const member = await callDB(db, 'getProjectUser', me, code);
-    if (!member || !(member as { permissions: { changeProjectSettings: boolean } }).permissions.changeProjectSettings) {
+    const member = await projectRepo.getProjectUser(me, code);
+    if (!member?.permissions.changeProjectSettings) {
       return reply.status(403).send({ error: 'Insufficient permissions' });
     }
 
@@ -168,18 +156,15 @@ export async function projectRoutes(app: FastifyInstance) {
 
     const permissions = body.data.role === 'viewer' ? VIEWER_PERMISSIONS : MEMBER_PERMISSIONS;
 
-    // Check if user with this email already exists
-    const existingUser = await callDB(db, 'getUserByEmail', body.data.email);
+    const existingUser = await userRepo.getUserByEmail(body.data.email);
     if (existingUser) {
-      const handle = (existingUser as { handle: string }).handle;
-      const alreadyMember = await callDB(db, 'getProjectUser', handle, code);
+      const alreadyMember = await projectRepo.getProjectUser(existingUser.handle, code);
       if (alreadyMember) return reply.status(409).send({ error: 'User is already a member' });
-      await callDB(db, 'addProjectUser', { userHandle: handle, projectCode: code, permissions });
+      await projectRepo.addProjectUser({ userHandle: existingUser.handle, projectCode: code, permissions });
       return reply.status(201).send({ added: true });
     }
 
-    // Create invitation for non-registered email
-    const invitation = await callDB(db, 'createInvitation', {
+    const invitation = await invitationRepo.createInvitation({
       projectCode: code,
       email: body.data.email,
       invitedBy: me,
@@ -191,10 +176,9 @@ export async function projectRoutes(app: FastifyInstance) {
   app.patch('/api/projects/:code/members/:handle', { onRequest: [app.authenticate] }, async (req, reply) => {
     const { code, handle } = req.params as { code: string; handle: string };
     const me = (req.user as { handle: string }).handle;
-    const db = getDB();
 
-    const myMember = await callDB(db, 'getProjectUser', me, code);
-    if (!myMember || !(myMember as { permissions: { changeProjectSettings: boolean } }).permissions.changeProjectSettings) {
+    const myMember = await projectRepo.getProjectUser(me, code);
+    if (!myMember?.permissions.changeProjectSettings) {
       return reply.status(403).send({ error: 'Insufficient permissions' });
     }
 
@@ -202,35 +186,33 @@ export async function projectRoutes(app: FastifyInstance) {
     if (!body.success) return reply.status(400).send({ error: body.error.issues[0]?.message });
 
     const permissions = body.data.role === 'viewer' ? VIEWER_PERMISSIONS : MEMBER_PERMISSIONS;
-    await callDB(db, 'updateProjectUser', handle, code, permissions);
+    await projectRepo.updateProjectUser(handle, code, permissions);
     return reply.send({ ok: true });
   });
 
   app.delete('/api/projects/:code/members/:handle', { onRequest: [app.authenticate] }, async (req, reply) => {
     const { code, handle } = req.params as { code: string; handle: string };
     const me = (req.user as { handle: string }).handle;
-    const db = getDB();
 
-    const myMember = await callDB(db, 'getProjectUser', me, code);
-    if (!myMember || !(myMember as { permissions: { changeProjectSettings: boolean } }).permissions.changeProjectSettings) {
+    const myMember = await projectRepo.getProjectUser(me, code);
+    if (!myMember?.permissions.changeProjectSettings) {
       if (handle !== me) return reply.status(403).send({ error: 'Insufficient permissions' });
     }
 
-    await callDB(db, 'removeProjectUser', handle, code);
+    await projectRepo.removeProjectUser(handle, code);
     return reply.status(204).send();
   });
 
   app.get('/api/projects/:code/invitations', { onRequest: [app.authenticate] }, async (req, reply) => {
     const { code } = req.params as { code: string };
     const me = (req.user as { handle: string }).handle;
-    const db = getDB();
 
-    const member = await callDB(db, 'getProjectUser', me, code);
-    if (!member || !(member as { permissions: { changeProjectSettings: boolean } }).permissions.changeProjectSettings) {
+    const member = await projectRepo.getProjectUser(me, code);
+    if (!member?.permissions.changeProjectSettings) {
       return reply.status(403).send({ error: 'Insufficient permissions' });
     }
 
-    const invitations = await callDB(db, 'getProjectInvitations', code);
+    const invitations = await invitationRepo.getProjectInvitations(code);
     return reply.send(invitations);
   });
 }

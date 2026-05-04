@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { getDB } from '../db/index';
 import { IS_PROD, config } from '../config';
+import * as userRepo from '../repositories/userRepo';
+import * as authService from '../services/authService';
 
 const LoginSchema = z.object({
   handle: z.string().min(1),
@@ -22,13 +23,12 @@ export async function authRoutes(app: FastifyInstance) {
       const body = RegisterSchema.safeParse(req.body);
       if (!body.success) return reply.status(400).send({ error: body.error.issues[0]?.message });
 
-      const db = getDB() as import('../db/sqlite').SQLiteDB;
-      if (db.handleExists(body.data.handle)) {
+      if (await userRepo.handleExists(body.data.handle)) {
         return reply.status(409).send({ error: 'Handle already taken' });
       }
 
       const passwordHash = await Bun.password.hash(body.data.password);
-      const user = db.createUser({
+      const user = await userRepo.createUser({
         handle: body.data.handle,
         displayName: body.data.displayName,
         passwordHash,
@@ -42,11 +42,10 @@ export async function authRoutes(app: FastifyInstance) {
       const body = LoginSchema.safeParse(req.body);
       if (!body.success) return reply.status(400).send({ error: 'Invalid request' });
 
-      const db = getDB() as import('../db/sqlite').SQLiteDB;
-      const user = db.getUserByHandle(body.data.handle);
+      const user = await userRepo.getUserByHandle(body.data.handle);
       if (!user) return reply.status(401).send({ error: 'Invalid credentials' });
 
-      const hash = db.getUserPasswordHash(body.data.handle);
+      const hash = await userRepo.getUserPasswordHash(body.data.handle);
       if (!hash) return reply.status(401).send({ error: 'Invalid credentials' });
 
       const valid = await Bun.password.verify(body.data.password, hash);
@@ -96,27 +95,7 @@ export async function authRoutes(app: FastifyInstance) {
         email: string; name: string; picture?: string; id: string;
       };
 
-      const db = getDB() as import('../db/supabase').SupabaseDB;
-      let user = await db.getUserByEmail(profile.email);
-      const isNew = !user;
-
-      if (!user) {
-        // Placeholder handle; user must pick one on first visit
-        const tempHandle = `user_${profile.id.slice(0, 8)}`;
-        user = await db.createUser({
-          handle: tempHandle,
-          displayName: profile.name,
-          email: profile.email,
-          avatarPath: profile.picture,
-        });
-
-        // Accept any pending invitations
-        const invitations = await db.getPendingInvitationsByEmail(profile.email);
-        for (const inv of invitations) {
-          await db.acceptInvitation(inv.id, user.handle);
-        }
-      }
-
+      const { user, isNew } = await authService.handleGoogleUser(profile);
       const token = app.jwt.sign({ handle: user.handle }, { expiresIn: '30d' });
       const redirectUrl = `${config.frontendUrl}/auth/callback?token=${token}&new=${isNew}`;
       return reply.redirect(redirectUrl);
@@ -130,10 +109,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/auth/me', { onRequest: [app.authenticate] }, async (req, reply) => {
-    const db = getDB();
-    const user = await (db as unknown as { getUserByHandle: (h: string) => unknown }).getUserByHandle(
-      (req.user as { handle: string }).handle
-    );
+    const user = await userRepo.getUserByHandle((req.user as { handle: string }).handle);
     if (!user) return reply.status(401).send({ error: 'User not found' });
     return reply.send(user);
   });

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Remove-Item \"x:\\\\dev\\\\sigmatodo2\\\\sigmatodo2-srv\\\\src\\\\db\\\\sqlite.ts\" -Force)",
+      "Bash(Remove-Item \"x:\\\\dev\\\\sigmatodo2\\\\sigmatodo2-srv\\\\src\\\\db\\\\supabase.ts\" -Force)",
+      "Bash(Write-Host \"Deleted\")"
+    ]
+  }
+}

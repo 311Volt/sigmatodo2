@@ -3,6 +3,7 @@ import fastifyJwt from '@fastify/jwt';
 import fastifyCors from '@fastify/cors';
 import fastifyMultipart from '@fastify/multipart';
 import { config, IS_PROD } from './src/config';
+import { runMigrations } from './src/db/migrate';
 import { authRoutes } from './src/routes/auth';
 import { userRoutes } from './src/routes/users';
 import { projectRoutes } from './src/routes/projects';
@@ -50,5 +51,6 @@ app.get('/api/health', async () => ({ ok: true }));
 
 // ── Start ──────────────────────────────────────────────────────────────────
 
+await runMigrations();
 await app.listen({ port: config.port, host: '0.0.0.0' });
 console.log(`sigmatodo2-srv running on port ${config.port} [${config.mode}]`);

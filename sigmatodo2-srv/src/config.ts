@@ -5,9 +5,9 @@ export const config = {
   port: parseInt(process.env.PORT ?? '3001'),
   jwtSecret: process.env.JWT_SECRET ?? 'dev-secret-change-me-in-prod',
   frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+  databaseUrl: process.env.DATABASE_URL ?? 'postgres://sigma:sigma@localhost:5432/sigmatodo2',
 
   // dev-only
-  dbPath: process.env.DB_PATH ?? './sigmatodo2.sqlite',
   uploadsDir: process.env.UPLOADS_DIR ?? './uploads',
 
   // prod-only
