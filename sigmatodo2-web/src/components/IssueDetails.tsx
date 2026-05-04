@@ -142,35 +142,42 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
               </span>
             )}
           </div>
-          {editingTitle ? (
-            <form
-              className="flex items-center gap-2 mt-1"
-              onSubmit={e => {
-                e.preventDefault();
-                if (titleDraft.trim()) update.mutate({ title: titleDraft.trim() });
-                setEditingTitle(false);
-              }}
-            >
-              <input
-                autoFocus
-                className="flex-1 min-w-0 text-lg font-semibold rounded-md border border-input bg-transparent px-2 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                value={titleDraft}
-                onChange={e => setTitleDraft(e.target.value)}
-                onBlur={() => {
+          <div className="flex items-center justify-between">
+            {editingTitle ? (
+              <form
+                className="flex items-center gap-2 flex-1"
+                onSubmit={e => {
+                  e.preventDefault();
                   if (titleDraft.trim()) update.mutate({ title: titleDraft.trim() });
                   setEditingTitle(false);
                 }}
-                onKeyDown={e => { if (e.key === 'Escape') setEditingTitle(false); }}
-              />
-            </form>
-          ) : (
-            <h2
-              className={`text-lg font-semibold leading-snug${canEdit ? ' cursor-pointer hover:text-muted-foreground' : ''}`}
-              onClick={canEdit ? () => { setTitleDraft(issue.title); setEditingTitle(true); } : undefined}
-            >
-              {issue.title}
-            </h2>
-          )}
+              >
+                <input
+                  autoFocus
+                  className="flex-1 min-w-0 text-lg font-semibold rounded-md border border-input bg-transparent px-2 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={titleDraft}
+                  onChange={e => setTitleDraft(e.target.value)}
+                  onBlur={() => {
+                    if (titleDraft.trim()) update.mutate({ title: titleDraft.trim() });
+                    setEditingTitle(false);
+                  }}
+                  onKeyDown={e => { if (e.key === 'Escape') setEditingTitle(false); }}
+                />
+              </form>
+            ) : (
+              <h2 className="text-lg font-semibold leading-snug">{issue.title}</h2>
+            )}
+            {canEdit && !editingTitle && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs shrink-0"
+                onClick={() => { setTitleDraft(issue.title); setEditingTitle(true); }}
+              >
+                <Pencil className="size-3 mr-1" /> Edit
+              </Button>
+            )}
+          </div>
         </div>
         <Button variant="ghost" size="icon" className="shrink-0" onClick={onClose}>
           <X className="size-4" />
