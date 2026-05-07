@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Moon, Sun, ChevronRight } from 'lucide-react';
+import { Moon, Sun, ChevronRight, Menu } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { fileUrl } from '@/lib/files';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -18,15 +18,21 @@ interface Breadcrumb {
 
 interface TopBarProps {
   breadcrumbs?: Breadcrumb[];
+  onMenuToggle?: () => void;
 }
 
-export default function TopBar({ breadcrumbs = [] }: TopBarProps) {
+export default function TopBar({ breadcrumbs = [], onMenuToggle }: TopBarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { isDark, toggle } = useDarkMode();
 
   return (
     <header className="h-12 border-b flex items-center px-4 gap-2 shrink-0">
+      {onMenuToggle && (
+        <Button variant="ghost" size="icon" className="shrink-0 min-[800px]:hidden" onClick={onMenuToggle}>
+          <Menu className="size-4" />
+        </Button>
+      )}
       <nav className="flex items-center gap-1 flex-1 min-w-0 text-sm">
         {breadcrumbs.map((crumb, i) => (
           <span key={i} className="flex items-center gap-1 min-w-0">

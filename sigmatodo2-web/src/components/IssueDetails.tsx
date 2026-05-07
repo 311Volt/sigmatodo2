@@ -1,8 +1,13 @@
 import { useState, useRef } from 'react';
+import type { ElementType } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Archive,
+  ArrowDown,
+  ArrowRight,
+  ArrowUp,
   Check,
+  ChevronsUp,
   Code2,
   File as FileIcon,
   FileText,
@@ -29,8 +34,22 @@ import {
 } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/datepicker';
 import { TimePicker } from '@/components/ui/timepicker';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import type { PermissionsMap } from 'sigmatodo2-common';
+
+const PRIORITY_COLORS: Record<string, string> = {
+  low: 'text-blue-500',
+  normal: 'text-yellow-500',
+  high: 'text-orange-500',
+  highest: 'text-red-500',
+};
+
+const PRIORITY_ICONS: Record<string, ElementType> = {
+  low: ArrowDown,
+  normal: ArrowRight,
+  high: ArrowUp,
+  highest: ChevronsUp,
+};
 
 interface IssueDetailsProps {
   issueCode: string;
@@ -226,7 +245,7 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
+      {/* Title section */}
       <div className="flex items-start gap-3 p-5 border-b">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -287,9 +306,183 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
         </Button>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Main content */}
-        <ScrollArea className="flex-1 min-h-0">
+      <ScrollArea className="flex-1 min-h-0">
+      {/* Header section — items use explicit row/col placement at ≥600px so that
+           labels share a row and values share a row across both columns.
+           DOM order (left fields first, then right fields) gives a clean single-column layout. */}
+      <div className="grid grid-cols-1 min-[600px]:grid-cols-2 gap-x-6 p-5 border-b text-sm items-start">
+
+        {/* ── Left column ─────────────────────────────────────────── */}
+
+        {/* Status label */}
+        <p className="text-xs font-medium text-muted-foreground uppercase mb-0.5
+                       min-[600px]:row-start-1">
+          Status
+        </p>
+        {/* Status value */}
+        <div className="pb-3 min-[600px]:row-start-2">
+          {canEdit ? (
+            <div className="flex flex-wrap gap-1.5">
+              {statusDefs.map(s => (
+                <button
+                  key={s.code}
+                  onClick={() => update.mutate({ status: s.code })}
+                  className="text-xs px-2 py-0.5 rounded-full text-white transition-all"
+                  style={{
+                    backgroundColor: s.bgColor,
+                    opacity: s.code === issue.status ? 1 : 0.5,
+                    filter: s.code === issue.status ? 'none' : 'saturate(0.5)',
+                  }}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          ) : currentStatus ? (
+            <span
+              className="inline-block text-xs px-2 py-0.5 rounded-full text-white"
+              style={{ backgroundColor: currentStatus.bgColor }}
+            >
+              {currentStatus.name}
+            </span>
+          ) : null}
+        </div>
+
+        {/* Priority label */}
+        <p className="text-xs font-medium text-muted-foreground uppercase mb-0.5
+                       min-[600px]:row-start-3">
+          Priority
+        </p>
+        {/* Priority value */}
+        <div className="pb-3 min-[600px]:row-start-4">
+          {canEdit ? (
+            <Select value={issue.priority} onValueChange={priority => update.mutate({ priority })}>
+              <SelectTrigger className="h-8 text-xs capitalize"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {(['low', 'normal', 'high', 'highest'] as const).map(p => {
+                  const Icon = PRIORITY_ICONS[p];
+                  return (
+                    <SelectItem key={p} value={p}>
+                      <div className="flex items-center gap-1.5 capitalize">
+                        {Icon && <Icon className={`size-3.5 ${PRIORITY_COLORS[p] ?? ''}`} />}
+                        {p}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              {(() => {
+                const Icon = PRIORITY_ICONS[issue.priority];
+                return Icon ? <Icon className={`size-3.5 ${PRIORITY_COLORS[issue.priority] ?? ''}`} /> : null;
+              })()}
+              <span className="text-xs capitalize">{issue.priority}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Assignee label + "assign to me" */}
+        <div className="flex items-center justify-between mb-0.5 min-[600px]:row-start-5">
+          <p className="text-xs font-medium text-muted-foreground uppercase">Assignee</p>
+          {canEdit && user && issue.assignedTo !== user.handle && (
+            <button
+              onClick={() => update.mutate({ assignedTo: user.handle })}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              assign to me
+            </button>
+          )}
+        </div>
+        {/* Assignee value */}
+        <div className="pb-3 min-[600px]:row-start-6">
+          {canEdit ? (
+            <Select
+              value={issue.assignedTo ?? '__none__'}
+              onValueChange={v => update.mutate({ assignedTo: v === '__none__' ? null : v })}
+            >
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Unassigned</SelectItem>
+                {memberList.map(m => (
+                  <SelectItem key={m.userHandle} value={m.userHandle}>
+                    <div className="flex items-center gap-1.5">
+                      <Avatar className="size-4 shrink-0">
+                        <AvatarImage src={fileUrl(m.user?.avatarPath)} />
+                        <AvatarFallback className="text-[9px]">
+                          {(m.user?.displayName ?? m.userHandle).charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      {m.user?.displayName ?? m.userHandle}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : issue.assignedTo ? (
+            <div className="flex items-center gap-1.5">
+              <Avatar className="size-5 shrink-0">
+                <AvatarImage src={fileUrl(issue.assignee?.avatarPath)} />
+                <AvatarFallback className="text-[9px]">
+                  {(issue.assignee?.displayName ?? issue.assignedTo).charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-xs">{issue.assignee?.displayName ?? issue.assignedTo}</span>
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground">Unassigned</span>
+          )}
+        </div>
+
+        {/* Due date (component spans its own rows, no right-column counterpart) */}
+        <div className="min-[600px]:row-start-7">
+          <DueDatePicker dueBy={issue.dueBy} onSet={iso => update.mutate({ dueBy: iso })} canEdit={canEdit} />
+        </div>
+
+        {/* ── Right column (explicitly placed at ≥600px) ──────────── */}
+
+        {/* Created by label */}
+        <p className="text-xs font-medium text-muted-foreground uppercase mb-0.5
+                       min-[600px]:col-start-2 min-[600px]:row-start-1">
+          Created by
+        </p>
+        {/* Created by value */}
+        <div className="pb-3 min-[600px]:col-start-2 min-[600px]:row-start-2">
+          <div className="flex items-center gap-1.5">
+            <Avatar className="size-4 shrink-0">
+              <AvatarImage src={fileUrl(issue.creator?.avatarPath)} />
+              <AvatarFallback className="text-[9px]">
+                {(issue.creator?.displayName ?? issue.createdBy ?? '?').charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <p className="text-xs">{issue.creator?.displayName ?? issue.createdBy ?? '—'}</p>
+          </div>
+        </div>
+
+        {/* Created label */}
+        <p className="text-xs font-medium text-muted-foreground uppercase mb-0.5
+                       min-[600px]:col-start-2 min-[600px]:row-start-3">
+          Created
+        </p>
+        {/* Created value — self-center so it aligns with the priority dropdown */}
+        <p className="text-xs pb-3 self-center min-[600px]:col-start-2 min-[600px]:row-start-4">
+          {new Date(issue.createdOn).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'medium' })}
+        </p>
+
+        {/* Updated label */}
+        <p className="text-xs font-medium text-muted-foreground uppercase mb-0.5
+                       min-[600px]:col-start-2 min-[600px]:row-start-5">
+          Updated
+        </p>
+        {/* Updated value — self-center so it aligns with the assignee dropdown */}
+        <p className="text-xs self-center min-[600px]:col-start-2 min-[600px]:row-start-6">
+          {new Date(issue.updatedOn).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'medium' })}
+        </p>
+
+      </div>
+
+      {/* Details section */}
         <div className="p-5 flex flex-col gap-6">
           {/* Description */}
           <section>
@@ -399,101 +592,7 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
             />
           </section>
         </div>
-        </ScrollArea>
-
-        {/* Sidebar */}
-        <ScrollArea className="w-48 border-l shrink-0">
-        <aside className="p-4 flex flex-col gap-4 text-sm">
-          {canEdit && (
-            <>
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground uppercase">Status</p>
-                <Select
-                  value={issue.status}
-                  onValueChange={status => update.mutate({ status })}
-                >
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {statusDefs.map(s => <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground uppercase">Priority</p>
-                <Select
-                  value={issue.priority}
-                  onValueChange={priority => update.mutate({ priority })}
-                >
-                  <SelectTrigger className="h-8 text-xs capitalize"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(['low', 'normal', 'high', 'highest'] as const).map(p => (
-                      <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground uppercase">Assignee</p>
-                <Select
-                  value={issue.assignedTo ?? '__none__'}
-                  onValueChange={v => update.mutate({ assignedTo: v === '__none__' ? null : v })}
-                >
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Unassigned</SelectItem>
-                    {memberList.map(m => (
-                      <SelectItem key={m.userHandle} value={m.userHandle}>
-                        <div className="flex items-center gap-1.5">
-                          <Avatar className="size-4 shrink-0">
-                            <AvatarImage src={fileUrl(m.user?.avatarPath)} />
-                            <AvatarFallback className="text-[9px]">
-                              {(m.user?.displayName ?? m.userHandle).charAt(0).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          {m.user?.displayName ?? m.userHandle}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <DueDatePicker
-                dueBy={issue.dueBy}
-                onSet={iso => update.mutate({ dueBy: iso })}
-              />
-            </>
-          )}
-          {!canEdit && issue.assignedTo && (
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase">Assignee</p>
-              <p className="text-xs">{issue.assignee?.displayName ?? issue.assignedTo}</p>
-            </div>
-          )}
-          <div className="border-t pt-3 flex flex-col gap-2 mt-auto">
-            <div className="space-y-0.5">
-              <p className="text-xs font-medium text-muted-foreground uppercase">Created by</p>
-              <div className="flex items-center gap-1.5">
-                <Avatar className="size-4 shrink-0">
-                  <AvatarImage src={fileUrl(issue.creator?.avatarPath)} />
-                  <AvatarFallback className="text-[9px]">
-                    {(issue.creator?.displayName ?? issue.createdBy ?? '?').charAt(0).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <p className="text-xs">{issue.creator?.displayName ?? issue.createdBy ?? '—'}</p>
-              </div>
-            </div>
-            <div className="space-y-0.5">
-              <p className="text-xs font-medium text-muted-foreground uppercase">Created</p>
-              <p className="text-xs">{new Date(issue.createdOn).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'medium' })}</p>
-            </div>
-            <div className="space-y-0.5">
-              <p className="text-xs font-medium text-muted-foreground uppercase">Updated</p>
-              <p className="text-xs">{new Date(issue.updatedOn).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'medium' })}</p>
-            </div>
-          </div>
-        </aside>
-        </ScrollArea>
-      </div>
+      </ScrollArea>
     </div>
   );
 }
@@ -686,7 +785,7 @@ function NewCommentBox({
   );
 }
 
-function DueDatePicker({ dueBy, onSet }: { dueBy: string | null; onSet: (iso: string | null) => void }) {
+function DueDatePicker({ dueBy, onSet, canEdit }: { dueBy: string | null; onSet: (iso: string | null) => void; canEdit: boolean }) {
   const selected = dueBy ? new Date(dueBy) : undefined;
   const timeValue = dueBy
     ? `${String(new Date(dueBy).getHours()).padStart(2, '0')}:${String(new Date(dueBy).getMinutes()).padStart(2, '0')}`
@@ -711,10 +810,24 @@ function DueDatePicker({ dueBy, onSet }: { dueBy: string | null; onSet: (iso: st
     onSet(d.toISOString());
   };
 
+  if (!canEdit) {
+    return (
+      <div className="space-y-0.5">
+        <p className="text-xs font-medium text-muted-foreground uppercase">Due date</p>
+        {dueBy ? (
+          <p className="text-xs">{new Date(dueBy).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">Not set</p>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-1">
+    <div className="space-y-1 @container">
       <label className="flex items-center gap-1.5 cursor-pointer">
-        <Checkbox
+        <Switch
+          size="sm"
           checked={!!dueBy}
           onCheckedChange={checked => onSet(checked ? (() => { const d = new Date(); d.setHours(23, 59, 0, 0); return d.toISOString(); })() : null)}
         />
@@ -722,9 +835,15 @@ function DueDatePicker({ dueBy, onSet }: { dueBy: string | null; onSet: (iso: st
       </label>
       {dueBy && (
         <>
-          <DatePicker value={selected} onChange={setDate} className="h-8 text-xs" />
-          <TimePicker value={timeValue} onChange={setTime} step={5} />
-          <div className="flex flex-col gap-1 pt-0.5">
+          <div className="flex flex-col @[280px]:flex-row gap-2">
+            <div className="flex-1">
+              <DatePicker value={selected} onChange={setDate} className="h-8 text-xs" />
+            </div>
+            <div className="@[280px]:w-28">
+              <TimePicker value={timeValue} onChange={setTime} step={5} className="h-8" />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1.5 pt-0.5">
             {[
               { label: 'by 23:59 today', getDate: () => { const d = new Date(); d.setHours(23, 59, 0, 0); return d; } },
               { label: 'in 3 days',      getDate: () => { const d = new Date(); d.setDate(d.getDate() + 3); d.setHours(23, 59, 0, 0); return d; } },
@@ -734,7 +853,7 @@ function DueDatePicker({ dueBy, onSet }: { dueBy: string | null; onSet: (iso: st
                 key={label}
                 type="button"
                 onClick={() => onSet(getDate().toISOString())}
-                className="text-left text-xs text-muted-foreground hover:text-foreground hover:underline"
+                className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground hover:bg-muted/80 transition-all"
               >
                 {label}
               </button>

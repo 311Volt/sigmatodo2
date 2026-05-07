@@ -102,7 +102,7 @@ export function TimePicker({ value, onChange, step = 1, className }: TimePickerP
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className={cn('w-full justify-start text-left font-normal', !value && 'text-muted-foreground', className)}
+          className={cn('w-full justify-start text-left font-normal text-xs', !value && 'text-muted-foreground', className)}
         >
           <Clock className="size-3.5 mr-2 shrink-0" />
           {value || '00:00'}
