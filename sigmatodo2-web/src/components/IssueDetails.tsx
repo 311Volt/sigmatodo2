@@ -436,7 +436,7 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
         </div>
 
         {/* Due date (component spans its own rows, no right-column counterpart) */}
-        <div className="min-[600px]:row-start-7">
+        <div className="pb-3 min-[600px]:row-start-7">
           <DueDatePicker dueBy={issue.dueBy} onSet={iso => update.mutate({ dueBy: iso })} canEdit={canEdit} />
         </div>
 
@@ -833,6 +833,9 @@ function DueDatePicker({ dueBy, onSet, canEdit }: { dueBy: string | null; onSet:
         />
         <p className="text-xs font-medium text-muted-foreground uppercase">Due date</p>
       </label>
+      {!dueBy && (
+        <p className="text-xs text-muted-foreground">Due date not set.</p>
+      )}
       {dueBy && (
         <>
           <div className="flex flex-col @[280px]:flex-row gap-2">
