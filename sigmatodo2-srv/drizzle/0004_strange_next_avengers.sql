@@ -1,0 +1,3 @@
+ALTER TABLE "attachments" ADD COLUMN "project_code" text NOT NULL;--> statement-breakpoint
+ALTER TABLE "attachments" ADD COLUMN "mime_type" text DEFAULT 'application/octet-stream' NOT NULL;--> statement-breakpoint
+ALTER TABLE "attachments" ADD CONSTRAINT "attachments_project_code_projects_code_fk" FOREIGN KEY ("project_code") REFERENCES "public"."projects"("code") ON DELETE cascade ON UPDATE no action;

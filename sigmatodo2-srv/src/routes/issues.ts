@@ -4,6 +4,7 @@ import type { SortOption } from 'sigmatodo2-common';
 import * as projectRepo from '../repositories/projectRepo';
 import * as issueRepo from '../repositories/issueRepo';
 import * as issueService from '../services/issueService';
+import { linkIssueCodes } from '../services/markdownService';
 
 const CreateIssueSchema = z.object({
   title: z.string().min(1).max(500),
@@ -26,6 +27,7 @@ const UpdateIssueSchema = z.object({
 async function requireProjectAccess(projectCode: string, userHandle: string, requireEdit = false) {
   const member = await projectRepo.getProjectUser(userHandle, projectCode);
   if (!member) return null;
+  if (!member.permissions.viewIssues) return null;
   if (requireEdit && !member.permissions.editIssues) return null;
   return member;
 }
@@ -76,7 +78,10 @@ export async function issueRoutes(app: FastifyInstance) {
     const member = await requireProjectAccess(issue.projectCode, me);
     if (!member) return reply.status(403).send({ error: 'Access denied' });
 
-    return reply.send(issue);
+    return reply.send({
+      ...issue,
+      renderedMarkdownDescription: linkIssueCodes(issue.markdownDescription),
+    });
   });
 
   app.patch('/api/issues/:code', { onRequest: [app.authenticate] }, async (req, reply) => {

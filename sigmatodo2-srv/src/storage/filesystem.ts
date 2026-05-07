@@ -48,10 +48,10 @@ export class FilesystemStorage {
   }
 
   // Returns relative path from uploadsDir (stored in DB; served through /api/files/{path})
-  async saveAttachment(issueCode: string, id: string, filename: string, data: Uint8Array): Promise<string> {
+  async saveAttachment(issueCode: string, id: string, filename: string, data: Uint8Array, mimeType: string): Promise<string> {
     const safeName = `${id}-${safeStorageFilename(filename)}`;
     const relPath = `attachments/${issueCode}/${safeName}`;
-    return this.uploadFile(relPath, data, 'application/octet-stream');
+    return this.uploadFile(relPath, data, mimeType);
   }
 
   async deleteFile(storedPath: string): Promise<void> {

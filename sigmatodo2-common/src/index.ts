@@ -83,6 +83,7 @@ export interface Issue {
   title: string;
   status: string;
   markdownDescription: string | null;
+  renderedMarkdownDescription?: string | null;
   commentCount: number;
 }
 
@@ -93,8 +94,10 @@ export interface IssueWithAssignee extends Issue {
 
 export interface Attachment {
   id: string;
+  projectCode: string;
   issueCode: string;
   filename: string;
+  mimeType: string;
   uploadedOn: string;
 }
 
@@ -105,6 +108,7 @@ export interface Comment {
   postedOn: string;
   editedOn: string | null;
   content: string;
+  renderedContent?: string;
   author?: User;
 }
 

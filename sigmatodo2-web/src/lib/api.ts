@@ -6,9 +6,25 @@ import type {
 import { fileUrl } from './files';
 
 const BASE = '/api';
+const ATTACHMENT_URL_PREFIX = `${BASE}/attachments/`;
 
 function getToken(): string | null {
   return localStorage.getItem('token');
+}
+
+function withAuthToken(url: string): string {
+  const token = getToken();
+  if (!token || !url.startsWith(ATTACHMENT_URL_PREFIX)) {
+    return url;
+  }
+
+  const hashIndex = url.indexOf('#');
+  const hash = hashIndex === -1 ? '' : url.slice(hashIndex);
+  const withoutHash = hashIndex === -1 ? url : url.slice(0, hashIndex);
+  const [path, query = ''] = withoutHash.split('?');
+  const params = new URLSearchParams(query);
+  params.set('token', token);
+  return `${path}?${params.toString()}${hash}`;
 }
 
 async function request<T>(
@@ -184,7 +200,11 @@ export const attachments = {
     return request<Attachment>(`/issues/${issueCode}/attachments`, { method: 'POST', body: form });
   },
 
-  getUrl: (id: string) => `/api/attachments/${id}`,
+  getUrl: (id: string) => `${ATTACHMENT_URL_PREFIX}${id}`,
+
+  getBrowserUrl: (id: string) => withAuthToken(`${ATTACHMENT_URL_PREFIX}${id}`),
+
+  withAuthToken,
 
   delete: (id: string) => request<void>(`/attachments/${id}`, { method: 'DELETE' }),
 };

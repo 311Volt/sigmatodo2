@@ -3,14 +3,21 @@ import { Eye, Pencil, Upload } from 'lucide-react';
 import { attachments as attachmentsApi } from '@/lib/api';
 import MarkdownViewer from './MarkdownViewer';
 import { Button } from '@/components/ui/button';
+import type { Attachment } from 'sigmatodo2-common';
 
 interface MarkdownEditorProps {
   value: string;
   onChange: (v: string) => void;
   issueCode?: string;
+  onAttachmentUploaded?: (attachment: Attachment) => void;
 }
 
-export default function MarkdownEditor({ value, onChange, issueCode }: MarkdownEditorProps) {
+export default function MarkdownEditor({
+  value,
+  onChange,
+  issueCode,
+  onAttachmentUploaded,
+}: MarkdownEditorProps) {
   const [preview, setPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -32,6 +39,7 @@ export default function MarkdownEditor({ value, onChange, issueCode }: MarkdownE
   const uploadImage = async (file: File) => {
     if (!issueCode) return;
     const attachment = await attachmentsApi.upload(issueCode, file);
+    onAttachmentUploaded?.(attachment);
     const url = attachmentsApi.getUrl(attachment.id);
     const md = `![${attachment.filename}](${url})`;
     const el = textareaRef.current;

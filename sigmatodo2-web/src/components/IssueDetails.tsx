@@ -1,11 +1,24 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Paperclip, Trash2, Pencil, Check } from 'lucide-react';
+import {
+  Archive,
+  Check,
+  Code2,
+  File as FileIcon,
+  FileText,
+  Image,
+  Music,
+  Paperclip,
+  Pencil,
+  Trash2,
+  Video,
+  X,
+} from 'lucide-react';
 import { issues as issuesApi, attachments as attachmentsApi, comments as commentsApi, projects as projectsApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { fileUrl } from '@/lib/files';
 import { formatTimeLeft } from '@/lib/time';
-import type { Project, Comment, IssueWithAssignee } from 'sigmatodo2-common';
+import type { Attachment, Project, Comment, IssueWithAssignee } from 'sigmatodo2-common';
 import MarkdownEditor from '@/components/MarkdownEditor';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import { Button } from '@/components/ui/button';
@@ -75,6 +88,18 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
     );
   };
 
+  const addAttachmentToCache = (attachment: Attachment) => {
+    qc.setQueryData<Attachment[]>(['attachments', issueCode], (old = []) => {
+      if (old.some(a => a.id === attachment.id)) return old;
+      return [attachment, ...old];
+    });
+  };
+
+  const handleAttachmentUploaded = (attachment: Attachment) => {
+    addAttachmentToCache(attachment);
+    qc.invalidateQueries({ queryKey: ['attachments', issueCode] });
+  };
+
   const update = useMutation({
     mutationFn: (data: Parameters<typeof issuesApi.update>[1]) => issuesApi.update(issueCode, data),
 
@@ -87,9 +112,12 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
       const prevLists = projectCode
         ? qc.getQueriesData<IssueWithAssignee[]>({ queryKey: ['issues', projectCode] })
         : [];
+      const optimisticData = data.markdownDescription !== undefined
+        ? { ...data, renderedMarkdownDescription: undefined }
+        : data;
 
       qc.setQueryData(['issue', issueCode], (old: typeof issue) =>
-        old ? { ...old, ...data } : old,
+        old ? { ...old, ...optimisticData } : old,
       );
       if (projectCode) {
         qc.setQueriesData<IssueWithAssignee[]>(
@@ -176,12 +204,15 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
 
   const uploadFile = useMutation({
     mutationFn: (file: File) => attachmentsApi.upload(issueCode, file),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['attachments', issueCode] }),
+    onSuccess: handleAttachmentUploaded,
   });
 
   const deleteAttachment = useMutation({
     mutationFn: (id: string) => attachmentsApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['attachments', issueCode] }),
+    onSuccess: (_data, id) => {
+      qc.setQueryData<Attachment[]>(['attachments', issueCode], old => old?.filter(a => a.id !== id));
+      qc.invalidateQueries({ queryKey: ['attachments', issueCode] });
+    },
   });
 
   if (isLoading || !issue) {
@@ -277,14 +308,19 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
             </div>
             {editingDesc ? (
               <div className="flex flex-col gap-2">
-                <MarkdownEditor value={descDraft} onChange={setDescDraft} issueCode={issueCode} />
+                <MarkdownEditor
+                  value={descDraft}
+                  onChange={setDescDraft}
+                  issueCode={issueCode}
+                  onAttachmentUploaded={handleAttachmentUploaded}
+                />
                 <div className="flex gap-2">
                   <Button size="sm" onClick={saveDesc}><Check className="size-3 mr-1" /> Save</Button>
                   <Button size="sm" variant="outline" onClick={() => setEditingDesc(false)}>Cancel</Button>
                 </div>
               </div>
             ) : issue.markdownDescription ? (
-              <MarkdownViewer content={issue.markdownDescription} />
+              <MarkdownViewer content={issue.renderedMarkdownDescription ?? issue.markdownDescription} />
             ) : (
               <p className="text-sm text-muted-foreground italic">No description yet.</p>
             )}
@@ -318,30 +354,16 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
             {attachmentList.length === 0 ? (
               <p className="text-sm text-muted-foreground">No attachments.</p>
             ) : (
-              <ul className="flex flex-col gap-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 {attachmentList.map(a => (
-                  <li key={a.id} className="flex items-center gap-2 text-sm">
-                    <a
-                      href={attachmentsApi.getUrl(a.id)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline flex-1 min-w-0 truncate"
-                    >
-                      {a.filename}
-                    </a>
-                    {canEdit && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-6 shrink-0"
-                        onClick={() => deleteAttachment.mutate(a.id)}
-                      >
-                        <Trash2 className="size-3" />
-                      </Button>
-                    )}
-                  </li>
+                  <AttachmentCard
+                    key={a.id}
+                    attachment={a}
+                    canEdit={canEdit}
+                    onDelete={() => deleteAttachment.mutate(a.id)}
+                  />
                 ))}
-              </ul>
+              </div>
             )}
           </section>
 
@@ -353,6 +375,8 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
                 key={c.id}
                 comment={c}
                 canEdit={c.postedBy === user?.handle}
+                issueCode={issueCode}
+                onAttachmentUploaded={handleAttachmentUploaded}
                 onUpdate={(content) => {
                   commentsApi.update(c.id, content).then(() => qc.invalidateQueries({ queryKey: ['comments', issueCode] }));
                 }}
@@ -369,6 +393,8 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
               />
             ))}
             <NewCommentBox
+              issueCode={issueCode}
+              onAttachmentUploaded={handleAttachmentUploaded}
               onSubmit={content => createComment.mutate(content)}
             />
           </section>
@@ -472,11 +498,112 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
   );
 }
 
+function getAttachmentIcon(mimeType: string) {
+  if (mimeType.startsWith('image/')) return Image;
+  if (mimeType.startsWith('video/')) return Video;
+  if (mimeType.startsWith('audio/')) return Music;
+  if (
+    mimeType.includes('zip') ||
+    mimeType.includes('tar') ||
+    mimeType.includes('gzip') ||
+    mimeType.includes('rar') ||
+    mimeType.includes('7z')
+  ) return Archive;
+  if (
+    mimeType.startsWith('text/') ||
+    mimeType.includes('pdf') ||
+    mimeType.includes('document') ||
+    mimeType.includes('presentation') ||
+    mimeType.includes('spreadsheet')
+  ) return FileText;
+  if (
+    mimeType.includes('json') ||
+    mimeType.includes('xml') ||
+    mimeType.includes('javascript') ||
+    mimeType.includes('typescript')
+  ) return Code2;
+  return FileIcon;
+}
+
+function formatMimeType(mimeType: string): string {
+  if (!mimeType) return 'File';
+  const [type, subtype] = mimeType.split('/');
+  if (!subtype) return mimeType;
+  return `${type} / ${subtype.replace(/[.+-]/g, ' ')}`;
+}
+
+function AttachmentCard({
+  attachment,
+  canEdit,
+  onDelete,
+}: {
+  attachment: Attachment;
+  canEdit: boolean;
+  onDelete: () => void;
+}) {
+  const href = attachmentsApi.getBrowserUrl(attachment.id);
+  const isImage = attachment.mimeType.startsWith('image/');
+  const Icon = getAttachmentIcon(attachment.mimeType);
+
+  return (
+    <div className="group rounded-md border bg-card shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+      <a href={href} target="_blank" rel="noopener noreferrer" className="block">
+        <div className="aspect-[4/3] bg-muted flex items-center justify-center overflow-hidden">
+          {isImage ? (
+            <img
+              src={href}
+              alt={attachment.filename}
+              loading="lazy"
+              className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
+            />
+          ) : (
+            <div className="flex flex-col items-center gap-2 text-muted-foreground">
+              <Icon className="size-10" />
+              <span className="text-[11px] uppercase">{attachment.mimeType.split('/')[0] ?? 'file'}</span>
+            </div>
+          )}
+        </div>
+      </a>
+      <div className="p-3">
+        <div className="flex items-start gap-2">
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="min-w-0 flex-1 truncate text-sm font-medium hover:text-primary"
+            title={attachment.filename}
+          >
+            {attachment.filename}
+          </a>
+          {canEdit && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7 shrink-0 text-muted-foreground hover:text-destructive"
+              onClick={onDelete}
+              aria-label={`Delete ${attachment.filename}`}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          )}
+        </div>
+        <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="min-w-0 truncate">{formatMimeType(attachment.mimeType)}</span>
+          <span className="shrink-0">{new Date(attachment.uploadedOn).toLocaleDateString()}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CommentItem({
-  comment, canEdit, onUpdate, onDelete,
+  comment, canEdit, issueCode, onAttachmentUploaded, onUpdate, onDelete,
 }: {
   comment: Comment;
   canEdit: boolean;
+  issueCode: string;
+  onAttachmentUploaded: (attachment: Attachment) => void;
   onUpdate: (content: string) => void;
   onDelete: () => void;
 }) {
@@ -514,10 +641,11 @@ function CommentItem({
         </div>
         {editing ? (
           <div className="flex flex-col gap-2">
-            <textarea
-              className="w-full min-h-[80px] rounded-md border border-input bg-transparent px-3 py-2 text-sm resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            <MarkdownEditor
               value={draft}
-              onChange={e => setDraft(e.target.value)}
+              onChange={setDraft}
+              issueCode={issueCode}
+              onAttachmentUploaded={onAttachmentUploaded}
             />
             <div className="flex gap-2">
               <Button size="sm" onClick={() => { onUpdate(draft); setEditing(false); }}><Check className="size-3 mr-1" /> Save</Button>
@@ -525,25 +653,33 @@ function CommentItem({
             </div>
           </div>
         ) : (
-          <MarkdownViewer content={comment.content} className="text-sm" />
+          <MarkdownViewer content={comment.renderedContent ?? comment.content} className="text-sm" />
         )}
       </div>
     </div>
   );
 }
 
-function NewCommentBox({ onSubmit }: { onSubmit: (content: string) => void }) {
+function NewCommentBox({
+  issueCode,
+  onAttachmentUploaded,
+  onSubmit,
+}: {
+  issueCode: string;
+  onAttachmentUploaded: (attachment: Attachment) => void;
+  onSubmit: (content: string) => void;
+}) {
   const [value, setValue] = useState('');
   return (
     <form
       onSubmit={e => { e.preventDefault(); if (value.trim()) { onSubmit(value); setValue(''); } }}
       className="flex flex-col gap-2"
     >
-      <textarea
-        className="w-full min-h-[80px] rounded-md border border-input bg-transparent px-3 py-2 text-sm resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        placeholder="Add a comment…"
+      <MarkdownEditor
         value={value}
-        onChange={e => setValue(e.target.value)}
+        onChange={setValue}
+        issueCode={issueCode}
+        onAttachmentUploaded={onAttachmentUploaded}
       />
       <Button type="submit" size="sm" disabled={!value.trim()} className="self-end">Comment</Button>
     </form>

@@ -49,8 +49,10 @@ export const issues = pgTable('issues', {
 
 export const attachments = pgTable('attachments', {
   id: uuid('id').primaryKey().defaultRandom(),
+  projectCode: text('project_code').notNull().references(() => projects.code, { onDelete: 'cascade' }),
   issueCode: text('issue_code').notNull().references(() => issues.code, { onDelete: 'cascade' }),
   filename: text('filename').notNull(),
+  mimeType: text('mime_type').notNull().default('application/octet-stream'),
   path: text('path').notNull(),
   uploadedOn: timestamp('uploaded_on').defaultNow().notNull(),
 });
@@ -89,6 +91,7 @@ export const usersRelations = relations(users, ({ many }) => ({
 export const projectsRelations = relations(projects, ({ many }) => ({
   projectUsers: many(projectUsers),
   issues: many(issues),
+  attachments: many(attachments),
   invitations: many(invitations),
 }));
 
@@ -110,6 +113,7 @@ export const issuesRelations = relations(issues, ({ one, many }) => ({
 }));
 
 export const attachmentsRelations = relations(attachments, ({ one }) => ({
+  project: one(projects, { fields: [attachments.projectCode], references: [projects.code] }),
   issue: one(issues, { fields: [attachments.issueCode], references: [issues.code] }),
 }));
 

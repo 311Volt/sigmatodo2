@@ -3,10 +3,18 @@ import { z } from 'zod';
 import * as issueRepo from '../repositories/issueRepo';
 import * as commentRepo from '../repositories/commentRepo';
 import * as projectRepo from '../repositories/projectRepo';
+import { linkIssueCodes } from '../services/markdownService';
 
 const CommentSchema = z.object({
   content: z.string().min(1).max(10000),
 });
+
+function renderCommentContent<T extends { content: string }>(comment: T): T & { renderedContent: string } {
+  return {
+    ...comment,
+    renderedContent: linkIssueCodes(comment.content) ?? '',
+  };
+}
 
 export async function commentRoutes(app: FastifyInstance) {
   app.get('/api/issues/:code/comments', { onRequest: [app.authenticate] }, async (req, reply) => {
@@ -17,10 +25,10 @@ export async function commentRoutes(app: FastifyInstance) {
     if (!issue) return reply.status(404).send({ error: 'Issue not found' });
 
     const member = await projectRepo.getProjectUser(me, issue.projectCode);
-    if (!member) return reply.status(403).send({ error: 'Access denied' });
+    if (!member?.permissions.viewIssues) return reply.status(403).send({ error: 'Access denied' });
 
     const comments = await commentRepo.getIssueComments(code);
-    return reply.send(comments);
+    return reply.send(comments.map(renderCommentContent));
   });
 
   app.post('/api/issues/:code/comments', { onRequest: [app.authenticate] }, async (req, reply) => {
@@ -37,7 +45,7 @@ export async function commentRoutes(app: FastifyInstance) {
     if (!body.success) return reply.status(400).send({ error: body.error.issues[0]?.message });
 
     const comment = await commentRepo.createComment({ issueCode: code, postedBy: me, content: body.data.content });
-    return reply.status(201).send(comment);
+    return reply.status(201).send(renderCommentContent(comment));
   });
 
   app.patch('/api/comments/:id', { onRequest: [app.authenticate] }, async (req, reply) => {
@@ -52,7 +60,7 @@ export async function commentRoutes(app: FastifyInstance) {
     if (!body.success) return reply.status(400).send({ error: body.error.issues[0]?.message });
 
     const updated = await commentRepo.updateComment(id, body.data.content);
-    return reply.send(updated);
+    return reply.send(renderCommentContent(updated));
   });
 
   app.delete('/api/comments/:id', { onRequest: [app.authenticate] }, async (req, reply) => {
