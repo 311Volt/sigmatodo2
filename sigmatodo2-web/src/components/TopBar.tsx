@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { Moon, Sun, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { fileUrl } from '@/lib/files';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -56,7 +57,7 @@ export default function TopBar({ breadcrumbs = [] }: TopBarProps) {
           <DropdownMenuTrigger asChild>
             <button className="shrink-0">
               <Avatar className="size-7">
-                <AvatarImage src={user.avatarPath ?? undefined} />
+                <AvatarImage src={fileUrl(user.avatarPath)} />
                 <AvatarFallback className="text-xs">
                   {user.displayName.charAt(0).toUpperCase()}
                 </AvatarFallback>

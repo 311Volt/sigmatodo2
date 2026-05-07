@@ -3,6 +3,7 @@ import type {
   Attachment, Comment, Invitation, InvitationDetails, ProjectWithStats, SortOption,
   StatusDefinition, PermissionsMap,
 } from 'sigmatodo2-common';
+import { fileUrl } from './files';
 
 const BASE = '/api';
 
@@ -121,6 +122,16 @@ export const projects = {
     request<void>(`/projects/${code}/members/${handle}`, { method: 'DELETE' }),
 
   getInvitations: (code: string) => request<Invitation[]>(`/projects/${code}/invitations`),
+};
+
+export const files = {
+  getUrl: fileUrl,
+
+  upload: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request<{ path: string }>('/files', { method: 'POST', body: form });
+  },
 };
 
 // ── Invitations ───────────────────────────────────────────────────────────

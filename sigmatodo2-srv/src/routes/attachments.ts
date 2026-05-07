@@ -65,12 +65,14 @@ export async function attachmentRoutes(app: FastifyInstance) {
     const member = await projectRepo.getProjectUser(me, issue.projectCode);
     if (!member) return reply.status(403).send({ error: 'Access denied' });
 
-    if (IS_PROD) {
-      const url = await (getStorage() as SupabaseStorage).getAttachmentUrl(attachment.path);
-      return reply.redirect(url);
-    } else {
-      return reply.redirect(`/api/uploads/${attachment.path}`);
-    }
+    const file = await getStorage().getFile(attachment.path);
+    if (!file) return reply.status(404).send({ error: 'Not found' });
+
+    return reply
+      .header('Content-Type', file.contentType)
+      .header('Content-Length', String(file.data.byteLength))
+      .header('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(attachment.filename)}`)
+      .send(Buffer.from(file.data));
   });
 
   app.delete('/api/attachments/:id', { onRequest: [app.authenticate] }, async (req, reply) => {
@@ -93,18 +95,4 @@ export async function attachmentRoutes(app: FastifyInstance) {
 
     return reply.status(204).send();
   });
-
-  if (!IS_PROD) {
-    app.get('/api/uploads/*', async (req, reply) => {
-      const storage = getStorage() as FilesystemStorage;
-      const relPath = (req.params as Record<string, string>)['*'] ?? '';
-      const fullPath = storage.resolveFullPath(relPath);
-      const file = Bun.file(fullPath);
-      if (!await file.exists()) return reply.status(404).send({ error: 'Not found' });
-      const buf = await file.arrayBuffer();
-      return reply
-        .header('Content-Type', file.type || 'application/octet-stream')
-        .send(Buffer.from(buf));
-    });
-  }
 }

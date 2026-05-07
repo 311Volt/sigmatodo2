@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Paperclip, Trash2, Pencil, Check } from 'lucide-react';
 import { issues as issuesApi, attachments as attachmentsApi, comments as commentsApi, projects as projectsApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { fileUrl } from '@/lib/files';
 import { formatTimeLeft } from '@/lib/time';
 import type { Project, Comment, IssueWithAssignee } from 'sigmatodo2-common';
 import MarkdownEditor from '@/components/MarkdownEditor';
@@ -418,7 +419,7 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
                       <SelectItem key={m.userHandle} value={m.userHandle}>
                         <div className="flex items-center gap-1.5">
                           <Avatar className="size-4 shrink-0">
-                            <AvatarImage src={m.user?.avatarPath ?? undefined} />
+                            <AvatarImage src={fileUrl(m.user?.avatarPath)} />
                             <AvatarFallback className="text-[9px]">
                               {(m.user?.displayName ?? m.userHandle).charAt(0).toUpperCase()}
                             </AvatarFallback>
@@ -447,7 +448,7 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
               <p className="text-xs font-medium text-muted-foreground uppercase">Created by</p>
               <div className="flex items-center gap-1.5">
                 <Avatar className="size-4 shrink-0">
-                  <AvatarImage src={issue.creator?.avatarPath ?? undefined} />
+                  <AvatarImage src={fileUrl(issue.creator?.avatarPath)} />
                   <AvatarFallback className="text-[9px]">
                     {(issue.creator?.displayName ?? issue.createdBy ?? '?').charAt(0).toUpperCase()}
                   </AvatarFallback>
@@ -485,7 +486,7 @@ function CommentItem({
   return (
     <div className="flex gap-3">
       <Avatar className="size-7 shrink-0 mt-0.5">
-        <AvatarImage src={comment.author?.avatarPath ?? undefined} />
+        <AvatarImage src={fileUrl(comment.author?.avatarPath)} />
         <AvatarFallback className="text-xs">
           {(comment.author?.displayName ?? comment.postedBy).charAt(0).toUpperCase()}
         </AvatarFallback>

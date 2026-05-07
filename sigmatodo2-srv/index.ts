@@ -9,6 +9,7 @@ import { userRoutes } from './src/routes/users';
 import { projectRoutes } from './src/routes/projects';
 import { issueRoutes } from './src/routes/issues';
 import { attachmentRoutes } from './src/routes/attachments';
+import { fileRoutes } from './src/routes/files';
 import { commentRoutes } from './src/routes/comments';
 import { invitationRoutes } from './src/routes/invitations';
 
@@ -45,6 +46,7 @@ await app.register(authRoutes);
 await app.register(userRoutes);
 await app.register(projectRoutes);
 await app.register(issueRoutes);
+await app.register(fileRoutes);
 await app.register(attachmentRoutes);
 await app.register(commentRoutes);
 await app.register(invitationRoutes);

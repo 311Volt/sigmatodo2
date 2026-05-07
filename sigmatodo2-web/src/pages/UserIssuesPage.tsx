@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowDown, ArrowRight, ArrowUp, ChevronsUp, MessageSquare } from 'lucide-react';
 import { users } from '@/lib/api';
+import { fileUrl } from '@/lib/files';
 import { formatTimeLeft } from '@/lib/time';
 import TopBar from '@/components/TopBar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -69,7 +70,7 @@ export default function UserIssuesPage() {
           <div className="flex flex-col gap-6">
             <div className="flex items-center gap-4">
               <Avatar className="size-14">
-                <AvatarImage src={user.avatarPath ?? undefined} />
+                <AvatarImage src={fileUrl(user.avatarPath)} />
                 <AvatarFallback className="text-xl">
                   {user.displayName.charAt(0).toUpperCase()}
                 </AvatarFallback>

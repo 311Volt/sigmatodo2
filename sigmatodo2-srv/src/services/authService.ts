@@ -1,4 +1,5 @@
 import * as userRepo from '../repositories/userRepo';
+import { fetchAndSaveUserAvatar } from './avatarService';
 import type { User } from 'sigmatodo2-common';
 
 export async function handleGoogleUser(profile: {
@@ -16,8 +17,10 @@ export async function handleGoogleUser(profile: {
       handle: tempHandle,
       displayName: profile.name,
       email: profile.email,
-      avatarPath: profile.picture,
     });
+    if (profile.picture) {
+      user = await fetchAndSaveUserAvatar(tempHandle, profile.picture) ?? user;
+    }
   }
 
   return { user, isNew };

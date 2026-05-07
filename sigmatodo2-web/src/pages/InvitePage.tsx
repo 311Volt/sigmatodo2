@@ -3,6 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { invitations as invitationsApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useDarkMode } from '@/lib/darkMode';
+import { fileUrl } from '@/lib/files';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 
@@ -51,7 +52,7 @@ export default function InvitePage() {
         {/* Inviter */}
         <div className="flex items-center gap-3">
           <Avatar className="size-10">
-            <AvatarImage src={details.inviter.avatarPath ?? undefined} />
+            <AvatarImage src={fileUrl(details.inviter.avatarPath)} />
             <AvatarFallback>
               {details.inviter.displayName.charAt(0).toUpperCase()}
             </AvatarFallback>
@@ -66,7 +67,7 @@ export default function InvitePage() {
         <div className="rounded-lg border p-5 flex flex-col gap-3">
           {details.project.backgroundImgPath && (
             <img
-              src={details.project.backgroundImgPath}
+              src={fileUrl(details.project.backgroundImgPath)}
               alt="Project background"
               className="w-full h-28 object-cover rounded-md"
             />

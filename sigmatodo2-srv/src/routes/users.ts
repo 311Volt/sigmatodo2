@@ -1,8 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { SortOption } from 'sigmatodo2-common';
-import { IS_PROD } from '../config';
-import { getStorage } from '../storage/index';
+import { saveUserAvatar } from '../services/avatarService';
 import * as issueService from '../services/issueService';
 import * as userRepo from '../repositories/userRepo';
 
@@ -68,15 +67,7 @@ export async function userRoutes(app: FastifyInstance) {
     const mimeType = data.mimetype;
     if (!mimeType.startsWith('image/')) return reply.status(400).send({ error: 'Must be an image' });
 
-    const storage = getStorage();
-    let avatarPath: string;
-    if (IS_PROD) {
-      avatarPath = await (storage as import('../storage/supabase').SupabaseStorage).saveAvatar(handle, buf, mimeType);
-    } else {
-      avatarPath = await (storage as import('../storage/filesystem').FilesystemStorage).saveAvatar(handle, buf, mimeType);
-    }
-
-    const user = await userRepo.updateUser(handle, { avatarPath });
+    const user = await saveUserAvatar(handle, buf, mimeType);
     return reply.send(user);
   });
 

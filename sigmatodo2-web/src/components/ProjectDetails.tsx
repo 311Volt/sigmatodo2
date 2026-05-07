@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Settings, UserPlus, Trash2 } from 'lucide-react';
 import { projects as projectsApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { fileUrl } from '@/lib/files';
 import type { Project, PermissionsMap } from 'sigmatodo2-common';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -43,7 +44,7 @@ export default function ProjectDetails({ project, projectCode }: ProjectDetailsP
       <div className="flex items-start gap-4">
         {project.backgroundImgPath && (
           <img
-            src={project.backgroundImgPath}
+            src={fileUrl(project.backgroundImgPath)}
             alt="Project background"
             className="w-24 h-16 object-cover rounded-lg shrink-0"
           />
@@ -84,7 +85,7 @@ export default function ProjectDetails({ project, projectCode }: ProjectDetailsP
                 className="flex items-center gap-3 flex-1 min-w-0 rounded-md hover:text-primary"
               >
                 <Avatar className="size-7">
-                  <AvatarImage src={m.user?.avatarPath ?? undefined} />
+                  <AvatarImage src={fileUrl(m.user?.avatarPath)} />
                   <AvatarFallback className="text-xs">
                     {(m.user?.displayName ?? m.userHandle).charAt(0).toUpperCase()}
                   </AvatarFallback>

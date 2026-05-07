@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { config } from '../config';
+import { extensionFromMimeType, requireStoragePath, safeStorageFilename } from './paths';
+import type { StoredFile } from './types';
 
 export class SupabaseStorage {
   private client: ReturnType<typeof createClient>;
@@ -12,37 +14,45 @@ export class SupabaseStorage {
     return this.client.storage;
   }
 
+  async uploadFile(path: string, data: Uint8Array, mimeType: string, upsert = false): Promise<string> {
+    const storagePath = requireStoragePath(path);
+    const { error } = await this.storage
+      .from('uploads')
+      .upload(storagePath, data, { contentType: mimeType, upsert });
+    if (error) throw error;
+    return storagePath;
+  }
+
+  async getFile(path: string): Promise<StoredFile | null> {
+    const storagePath = requireStoragePath(path);
+    const { data, error } = await this.storage.from('uploads').download(storagePath);
+    if (error || !data) return null;
+
+    return {
+      data: new Uint8Array(await data.arrayBuffer()),
+      contentType: data.type || 'application/octet-stream',
+    };
+  }
+
   async saveAvatar(handle: string, data: Uint8Array, mimeType: string): Promise<string> {
-    const ext = mimeType.split('/')[1] ?? 'jpg';
+    const ext = extensionFromMimeType(mimeType, 'jpg');
     const path = `avatars/${handle}.${ext}`;
-    await this.storage.from('uploads').upload(path, data, { contentType: mimeType, upsert: true });
-    const { data: urlData } = this.storage.from('uploads').getPublicUrl(path);
-    return urlData.publicUrl;
+    return this.uploadFile(path, data, mimeType, true);
   }
 
   async saveProjectBackground(projectCode: string, data: Uint8Array, mimeType: string): Promise<string> {
-    const ext = mimeType.split('/')[1] ?? 'jpg';
+    const ext = extensionFromMimeType(mimeType, 'jpg');
     const path = `projects/${projectCode}/bg.${ext}`;
-    await this.storage.from('uploads').upload(path, data, { contentType: mimeType, upsert: true });
-    const { data: urlData } = this.storage.from('uploads').getPublicUrl(path);
-    return urlData.publicUrl;
+    return this.uploadFile(path, data, mimeType, true);
   }
 
   async saveAttachment(issueCode: string, id: string, filename: string, data: Uint8Array, mimeType: string): Promise<string> {
-    const path = `attachments/${issueCode}/${id}-${filename}`;
-    await this.storage.from('uploads').upload(path, data, { contentType: mimeType });
-    return path;
-  }
-
-  async getAttachmentUrl(path: string): Promise<string> {
-    const { data } = await this.storage.from('uploads').createSignedUrl(path, 3600);
-    return data?.signedUrl ?? '';
+    const path = `attachments/${issueCode}/${id}-${safeStorageFilename(filename)}`;
+    return this.uploadFile(path, data, mimeType);
   }
 
   async deleteFile(path: string): Promise<void> {
-    const storagePath = path.startsWith('attachments/') || path.startsWith('avatars/') || path.startsWith('projects/')
-      ? path
-      : path.replace(/^\//, '');
+    const storagePath = requireStoragePath(path);
     await this.storage.from('uploads').remove([storagePath]);
   }
 }

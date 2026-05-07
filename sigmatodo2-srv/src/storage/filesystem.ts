@@ -1,9 +1,10 @@
 import { mkdir, unlink } from 'fs/promises';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import { config } from '../config';
+import { extensionFromMimeType, requireStoragePath, safeStorageFilename } from './paths';
+import type { StoredFile } from './types';
 
 // All paths returned are relative to uploadsDir (e.g. "avatars/handle.jpg").
-// Avatar/background paths are also served as /api/uploads/{relpath}.
 export class FilesystemStorage {
   private base: string;
 
@@ -15,44 +16,51 @@ export class FilesystemStorage {
     await mkdir(dir, { recursive: true });
   }
 
-  async saveAvatar(handle: string, data: Uint8Array, mimeType: string): Promise<string> {
-    const ext = mimeType.split('/')[1] ?? 'jpg';
-    const relPath = `avatars/${handle}.${ext}`;
+  async uploadFile(path: string, data: Uint8Array, mimeType: string): Promise<string> {
+    const relPath = requireStoragePath(path);
     const fullPath = join(this.base, relPath);
-    await this.ensureDir(join(this.base, 'avatars'));
-    await Bun.write(fullPath, data);
-    return `/api/uploads/${relPath}`;
-  }
-
-  async saveProjectBackground(projectCode: string, data: Uint8Array, mimeType: string): Promise<string> {
-    const ext = mimeType.split('/')[1] ?? 'jpg';
-    const relPath = `projects/${projectCode}/bg.${ext}`;
-    const fullPath = join(this.base, relPath);
-    await this.ensureDir(join(this.base, 'projects', projectCode));
-    await Bun.write(fullPath, data);
-    return `/api/uploads/${relPath}`;
-  }
-
-  // Returns relative path from uploadsDir (stored in DB; served at /api/uploads/{path})
-  async saveAttachment(issueCode: string, id: string, filename: string, data: Uint8Array): Promise<string> {
-    const safeName = `${id}-${filename}`;
-    const relPath = `attachments/${issueCode}/${safeName}`;
-    const fullPath = join(this.base, relPath);
-    await this.ensureDir(join(this.base, 'attachments', issueCode));
+    await this.ensureDir(dirname(fullPath));
     await Bun.write(fullPath, data);
     return relPath;
   }
 
-  // path may be a relative path from uploadsDir or a /api/uploads/ URL
+  async getFile(path: string): Promise<StoredFile | null> {
+    const relPath = requireStoragePath(path);
+    const file = Bun.file(join(this.base, relPath));
+    if (!await file.exists()) return null;
+
+    return {
+      data: new Uint8Array(await file.arrayBuffer()),
+      contentType: file.type || 'application/octet-stream',
+    };
+  }
+
+  async saveAvatar(handle: string, data: Uint8Array, mimeType: string): Promise<string> {
+    const ext = extensionFromMimeType(mimeType, 'jpg');
+    const relPath = `avatars/${handle}.${ext}`;
+    return this.uploadFile(relPath, data, mimeType);
+  }
+
+  async saveProjectBackground(projectCode: string, data: Uint8Array, mimeType: string): Promise<string> {
+    const ext = extensionFromMimeType(mimeType, 'jpg');
+    const relPath = `projects/${projectCode}/bg.${ext}`;
+    return this.uploadFile(relPath, data, mimeType);
+  }
+
+  // Returns relative path from uploadsDir (stored in DB; served through /api/files/{path})
+  async saveAttachment(issueCode: string, id: string, filename: string, data: Uint8Array): Promise<string> {
+    const safeName = `${id}-${safeStorageFilename(filename)}`;
+    const relPath = `attachments/${issueCode}/${safeName}`;
+    return this.uploadFile(relPath, data, 'application/octet-stream');
+  }
+
   async deleteFile(storedPath: string): Promise<void> {
-    const relPath = storedPath.startsWith('/api/uploads/')
-      ? storedPath.slice('/api/uploads/'.length)
-      : storedPath;
+    const relPath = requireStoragePath(storedPath);
     await unlink(join(this.base, relPath)).catch(() => {});
   }
 
   resolveFullPath(relPath: string): string {
-    return join(this.base, relPath);
+    return join(this.base, requireStoragePath(relPath));
   }
 
   getUploadsDir(): string {

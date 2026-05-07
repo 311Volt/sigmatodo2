@@ -1,4 +1,5 @@
 import type { ProjectWithStats } from 'sigmatodo2-common';
+import { fileUrl } from '@/lib/files';
 
 interface ProjectCardProps {
   project: ProjectWithStats;
@@ -13,7 +14,7 @@ export default function ProjectCard({ project, onClick }: ProjectCardProps) {
     >
       <div
         className="h-24 bg-muted bg-cover bg-center"
-        style={project.backgroundImgPath ? { backgroundImage: `url(${project.backgroundImgPath})` } : {}}
+        style={project.backgroundImgPath ? { backgroundImage: `url(${fileUrl(project.backgroundImgPath)})` } : {}}
       />
       <div className="p-4">
         <div className="flex items-center gap-2 mb-1">

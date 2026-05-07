@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth';
 import { users } from '@/lib/api';
+import { fileUrl } from '@/lib/files';
 import TopBar from '@/components/TopBar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -20,7 +21,7 @@ export default function EditProfilePage() {
     displayName: me?.displayName ?? '',
     bio: me?.bio ?? '',
   });
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(me?.avatarPath ?? null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(fileUrl(me?.avatarPath) ?? null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [error, setError] = useState('');
 
@@ -66,7 +67,7 @@ export default function EditProfilePage() {
         <form onSubmit={e => { e.preventDefault(); save.mutate(); }} className="flex flex-col gap-5">
           <div className="flex items-center gap-4">
             <Avatar className="size-20 cursor-pointer" onClick={() => fileRef.current?.click()}>
-              <AvatarImage src={avatarPreview ?? undefined} />
+              <AvatarImage src={fileUrl(avatarPreview)} />
               <AvatarFallback className="text-2xl">
                 {form.displayName.charAt(0).toUpperCase()}
               </AvatarFallback>

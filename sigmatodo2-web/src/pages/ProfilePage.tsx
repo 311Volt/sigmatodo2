@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ListTodo, Pencil } from 'lucide-react';
 import { users } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { fileUrl } from '@/lib/files';
 import TopBar from '@/components/TopBar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -29,7 +30,7 @@ export default function ProfilePage() {
           <div className="flex flex-col gap-6">
             <div className="flex items-center gap-6">
               <Avatar className="size-20">
-                <AvatarImage src={user.avatarPath ?? undefined} />
+                <AvatarImage src={fileUrl(user.avatarPath)} />
                 <AvatarFallback className="text-2xl">
                   {user.displayName.charAt(0).toUpperCase()}
                 </AvatarFallback>

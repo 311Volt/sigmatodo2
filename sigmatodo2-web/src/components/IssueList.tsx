@@ -4,6 +4,7 @@ import { Plus, ArrowDown, ArrowRight, ArrowUp, ChevronsUp, MessageSquare } from 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { issues as issuesApi, projects as projectsApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { fileUrl } from '@/lib/files';
 import { formatTimeLeft } from '@/lib/time';
 import type { IssueWithAssignee, Priority, SortOption, StatusDefinition } from 'sigmatodo2-common';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -210,7 +211,7 @@ export default function IssueList({
                     <SelectItem key={m.userHandle} value={m.userHandle}>
                       <div className="flex items-center gap-1.5">
                         <Avatar className="size-4 shrink-0">
-                          <AvatarImage src={m.user?.avatarPath ?? undefined} />
+                          <AvatarImage src={fileUrl(m.user?.avatarPath)} />
                           <AvatarFallback className="text-[9px]">
                             {(m.user?.displayName ?? m.userHandle).charAt(0).toUpperCase()}
                           </AvatarFallback>
@@ -364,7 +365,7 @@ function AssigneeAvatar({ issue }: { issue: IssueWithAssignee }) {
   const label = issue.assignee?.displayName ?? issue.assignedTo ?? 'Unassigned';
   return (
     <Avatar className="size-5 shrink-0">
-      <AvatarImage src={issue.assignee?.avatarPath ?? undefined} />
+      <AvatarImage src={fileUrl(issue.assignee?.avatarPath)} />
       <AvatarFallback className="text-[10px]">
         {issue.assignee ? label.charAt(0).toUpperCase() : '?'}
       </AvatarFallback>
