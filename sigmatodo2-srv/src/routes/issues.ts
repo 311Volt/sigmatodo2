@@ -53,7 +53,16 @@ export async function issueRoutes(app: FastifyInstance) {
     const body = CreateIssueSchema.safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: body.error.issues[0]?.message });
 
-    const issue = await issueRepo.createIssue({ projectCode: code, createdBy: me, ...body.data });
+    const issue = await issueRepo.createIssue({
+      projectCode: code,
+      createdBy: me,
+      title: body.data.title!,
+      status: body.data.status!,
+      priority: body.data.priority,
+      dueBy: body.data.dueBy,
+      markdownDescription: body.data.markdownDescription,
+      assignedTo: body.data.assignedTo === undefined ? me : body.data.assignedTo,
+    });
     return reply.status(201).send(issue);
   });
 

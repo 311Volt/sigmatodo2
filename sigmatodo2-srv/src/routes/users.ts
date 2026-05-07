@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import type { SortOption } from 'sigmatodo2-common';
 import { IS_PROD } from '../config';
 import { getStorage } from '../storage/index';
+import * as issueService from '../services/issueService';
 import * as userRepo from '../repositories/userRepo';
 
 const UpdateProfileSchema = z.object({
@@ -10,6 +12,22 @@ const UpdateProfileSchema = z.object({
 });
 
 export async function userRoutes(app: FastifyInstance) {
+  app.get('/api/users/:handle/issues', { onRequest: [app.authenticate] }, async (req, reply) => {
+    const { handle } = req.params as { handle: string };
+    const me = (req.user as { handle: string }).handle;
+    const { sort = 'relevant' } = req.query as { sort?: string };
+
+    const user = await userRepo.getUserByHandle(handle);
+    if (!user) return reply.status(404).send({ error: 'User not found' });
+
+    if (handle !== me && !(await userRepo.hasMutualProject(me, handle))) {
+      return reply.status(403).send({ error: 'Access denied' });
+    }
+
+    const issues = await issueService.getVisibleAssignedIssues(handle, me, sort as SortOption);
+    return reply.send(issues);
+  });
+
   app.get('/api/users/:handle', { onRequest: [app.authenticate] }, async (req, reply) => {
     const { handle } = req.params as { handle: string };
     const user = await userRepo.getUserByHandle(handle);
@@ -17,6 +35,9 @@ export async function userRoutes(app: FastifyInstance) {
 
     const me = (req.user as { handle: string }).handle;
     if (handle !== me) {
+      if (!(await userRepo.hasMutualProject(me, handle))) {
+        return reply.status(403).send({ error: 'Access denied' });
+      }
       const { email: _email, ...pub } = user;
       return reply.send(pub);
     }

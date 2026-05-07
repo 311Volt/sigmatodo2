@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, ArrowDown, ArrowRight, ArrowUp, ChevronsUp } from 'lucide-react';
+import { Plus, ArrowDown, ArrowRight, ArrowUp, ChevronsUp, MessageSquare } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { issues as issuesApi } from '@/lib/api';
+import { issues as issuesApi, projects as projectsApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatTimeLeft } from '@/lib/time';
-import type { IssueWithAssignee, SortOption, StatusDefinition } from 'sigmatodo2-common';
+import type { IssueWithAssignee, Priority, SortOption, StatusDefinition } from 'sigmatodo2-common';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -25,6 +26,26 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'comments', label: 'Most comments' },
 ];
 
+const UNASSIGNED_VALUE = '__none__';
+
+interface NewIssueForm {
+  title: string;
+  status: string;
+  priority: Priority;
+  assignedTo: string;
+  markdownDescription: string;
+}
+
+function createInitialNewForm(myHandle?: string | null): NewIssueForm {
+  return {
+    title: '',
+    status: '',
+    priority: 'normal',
+    assignedTo: myHandle ?? UNASSIGNED_VALUE,
+    markdownDescription: '',
+  };
+}
+
 interface IssueListProps {
   projectCode: string;
   sort: SortOption;
@@ -40,7 +61,7 @@ export default function IssueList({
   const { user } = useAuth();
   const qc = useQueryClient();
   const [newOpen, setNewOpen] = useState(false);
-  const [newForm, setNewForm] = useState({ title: '', status: '', priority: 'normal' });
+  const [newForm, setNewForm] = useState<NewIssueForm>(() => createInitialNewForm(user?.handle));
   const [newError, setNewError] = useState('');
 
   const { data: allIssues = [], isLoading } = useQuery({
@@ -48,16 +69,23 @@ export default function IssueList({
     queryFn: () => issuesApi.list(projectCode, sort),
   });
 
+  const { data: memberList = [] } = useQuery({
+    queryKey: ['members', projectCode],
+    queryFn: () => projectsApi.getMembers(projectCode),
+  });
+
   const create = useMutation({
     mutationFn: () => issuesApi.create(projectCode, {
       title: newForm.title,
       status: newForm.status || (statusDefinitions[0]?.code ?? 'TODO'),
       priority: newForm.priority,
+      assignedTo: newForm.assignedTo === UNASSIGNED_VALUE ? null : newForm.assignedTo,
+      markdownDescription: newForm.markdownDescription.trim() || null,
     }),
     onSuccess: issue => {
       qc.invalidateQueries({ queryKey: ['issues', projectCode] });
       setNewOpen(false);
-      setNewForm({ title: '', status: '', priority: 'normal' });
+      setNewForm(createInitialNewForm(user?.handle));
       onSelect(issue.code);
     },
     onError: (err: Error) => setNewError(err.message),
@@ -65,10 +93,19 @@ export default function IssueList({
 
   const statusMap = Object.fromEntries(statusDefinitions.map(s => [s.code, s]));
   const myHandle = user?.handle ?? null;
-  const myIssues = allIssues.filter(i => i.assignedTo === myHandle);
-  const otherIssues = allIssues.filter(i => i.assignedTo !== myHandle);
+  const myIssues = myHandle
+    ? allIssues.filter(i => i.assignedTo === myHandle && statusMap[i.status]?.isActive)
+    : [];
+  const otherIssues = myHandle
+    ? allIssues.filter(i => !(i.assignedTo === myHandle && statusMap[i.status]?.isActive))
+    : allIssues;
 
   const defaultStatus = statusDefinitions[0]?.code ?? 'TODO';
+  const openNewIssue = () => {
+    setNewForm(createInitialNewForm(user?.handle));
+    setNewError('');
+    setNewOpen(true);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -83,7 +120,7 @@ export default function IssueList({
             ))}
           </SelectContent>
         </Select>
-        <Button size="icon" variant="ghost" className="size-8 shrink-0" onClick={() => { setNewOpen(true); setNewError(''); }}>
+        <Button size="icon" variant="ghost" className="size-8 shrink-0" onClick={openNewIssue}>
           <Plus className="size-4" />
         </Button>
       </div>
@@ -149,7 +186,7 @@ export default function IssueList({
                 <Label>Priority</Label>
                 <Select
                   value={newForm.priority}
-                  onValueChange={v => setNewForm(f => ({ ...f, priority: v }))}
+                  onValueChange={v => setNewForm(f => ({ ...f, priority: v as Priority }))}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -159,6 +196,40 @@ export default function IssueList({
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Assignee</Label>
+              <Select
+                value={newForm.assignedTo}
+                onValueChange={v => setNewForm(f => ({ ...f, assignedTo: v }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UNASSIGNED_VALUE}>Unassigned</SelectItem>
+                  {memberList.map(m => (
+                    <SelectItem key={m.userHandle} value={m.userHandle}>
+                      <div className="flex items-center gap-1.5">
+                        <Avatar className="size-4 shrink-0">
+                          <AvatarImage src={m.user?.avatarPath ?? undefined} />
+                          <AvatarFallback className="text-[9px]">
+                            {(m.user?.displayName ?? m.userHandle).charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        {m.user?.displayName ?? m.userHandle}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Description</Label>
+              <textarea
+                className="w-full min-h-[120px] rounded-md border border-input bg-transparent px-3 py-2 text-sm resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={newForm.markdownDescription}
+                onChange={e => setNewForm(f => ({ ...f, markdownDescription: e.target.value }))}
+                placeholder="Add details, notes, or acceptance criteria"
+              />
             </div>
             {newError && <p className="text-destructive text-sm">{newError}</p>}
             <DialogFooter>
@@ -231,13 +302,19 @@ function IssueRow({
 }) {
   const status = statusMap[issue.status];
   const timeLeft = status?.isActive ? formatTimeLeft(issue.dueBy) : null;
-  const needsAttention = status?.isActive && issue.assignedTo === myHandle;
+  const needsAttention = !!myHandle && status?.isActive && issue.assignedTo === myHandle;
 
   return (
     <button
       onClick={onSelect}
-      className={`w-full text-left px-3 py-2.5 border-b hover:bg-accent transition-colors ${selected ? 'bg-accent' : ''}`}
+      className={`relative w-full text-left px-3 pr-12 py-2.5 border-b hover:bg-accent transition-colors ${selected ? 'bg-accent' : ''}`}
     >
+      {issue.commentCount > 0 && (
+        <div className="absolute right-3 top-2 flex items-center gap-1 text-xs text-muted-foreground">
+          <MessageSquare className="size-3" />
+          <span>{issue.commentCount}</span>
+        </div>
+      )}
       <div className="flex items-start gap-2">
         {(() => {
           const Icon = PRIORITY_ICONS[issue.priority];
@@ -268,7 +345,10 @@ function IssueRow({
               </span>
             )}
           </div>
-          <p className="text-sm leading-tight line-clamp-2">{issue.title}</p>
+          <div className="flex items-center gap-2">
+            <AssigneeAvatar issue={issue} />
+            <p className="text-sm leading-tight line-clamp-2">{issue.title}</p>
+          </div>
           {timeLeft && (
             <p className={`text-xs mt-1 ${timeLeft.overdue ? 'text-destructive' : 'text-muted-foreground'}`}>
               {timeLeft.text}
@@ -277,5 +357,17 @@ function IssueRow({
         </div>
       </div>
     </button>
+  );
+}
+
+function AssigneeAvatar({ issue }: { issue: IssueWithAssignee }) {
+  const label = issue.assignee?.displayName ?? issue.assignedTo ?? 'Unassigned';
+  return (
+    <Avatar className="size-5 shrink-0">
+      <AvatarImage src={issue.assignee?.avatarPath ?? undefined} />
+      <AvatarFallback className="text-[10px]">
+        {issue.assignee ? label.charAt(0).toUpperCase() : '?'}
+      </AvatarFallback>
+    </Avatar>
   );
 }

@@ -63,6 +63,9 @@ export const auth = {
 export const users = {
   get: (handle: string) => request<User>(`/users/${handle}`),
 
+  issues: (handle: string, sort: SortOption = 'relevant') =>
+    request<IssueWithAssignee[]>(`/users/${handle}/issues?sort=${sort}`),
+
   update: (handle: string, data: { displayName?: string; bio?: string | null }) =>
     request<User>(`/users/${handle}`, {
       method: 'PATCH',

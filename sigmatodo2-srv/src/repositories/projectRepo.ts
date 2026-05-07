@@ -97,6 +97,13 @@ export async function getProjectStatusDefs(code: string): Promise<StatusDefiniti
   return rows[0]?.statusDefinitions ?? [];
 }
 
+export async function getUserProjectCodes(handle: string): Promise<string[]> {
+  const rows = await db.select({ projectCode: projectUsers.projectCode })
+    .from(projectUsers)
+    .where(eq(projectUsers.userHandle, handle));
+  return rows.map(row => row.projectCode);
+}
+
 // ── Project users ────────────────────────────────────────────────────────────
 
 export async function getProjectUser(userHandle: string, projectCode: string): Promise<ProjectUser | null> {

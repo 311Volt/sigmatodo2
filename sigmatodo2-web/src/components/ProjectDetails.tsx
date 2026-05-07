@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Settings, UserPlus, Trash2 } from 'lucide-react';
 import { projects as projectsApi } from '@/lib/api';
@@ -78,16 +79,21 @@ export default function ProjectDetails({ project, projectCode }: ProjectDetailsP
         <div className="flex flex-col gap-2">
           {members.map(m => (
             <div key={m.userHandle} className="flex items-center gap-3">
-              <Avatar className="size-7">
-                <AvatarImage src={m.user?.avatarPath ?? undefined} />
-                <AvatarFallback className="text-xs">
-                  {(m.user?.displayName ?? m.userHandle).charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{m.user?.displayName ?? m.userHandle}</p>
-                <p className="text-xs text-muted-foreground">@{m.userHandle}</p>
-              </div>
+              <Link
+                to={`/profile/${m.userHandle}`}
+                className="flex items-center gap-3 flex-1 min-w-0 rounded-md hover:text-primary"
+              >
+                <Avatar className="size-7">
+                  <AvatarImage src={m.user?.avatarPath ?? undefined} />
+                  <AvatarFallback className="text-xs">
+                    {(m.user?.displayName ?? m.userHandle).charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{m.user?.displayName ?? m.userHandle}</p>
+                  <p className="text-xs text-muted-foreground">@{m.userHandle}</p>
+                </div>
+              </Link>
               <span className="text-xs text-muted-foreground">
                 {m.permissions.changeProjectSettings ? 'owner' : m.permissions.editIssues ? 'editor' : 'viewer'}
               </span>
@@ -129,4 +135,3 @@ export default function ProjectDetails({ project, projectCode }: ProjectDetailsP
     </div>
   );
 }
-

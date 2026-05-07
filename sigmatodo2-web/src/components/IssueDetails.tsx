@@ -57,6 +57,23 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
     enabled: !!project,
   });
 
+  const updateCachedCommentCount = (delta: number, projectCode = issue?.projectCode) => {
+    const updateCount = (old: IssueWithAssignee | undefined) =>
+      old ? { ...old, commentCount: Math.max(0, old.commentCount + delta) } : old;
+
+    qc.setQueryData<IssueWithAssignee>(['issue', issueCode], updateCount);
+    if (projectCode) {
+      qc.setQueriesData<IssueWithAssignee[]>(
+        { queryKey: ['issues', projectCode] },
+        (old) => old?.map(i => (i.code === issueCode ? updateCount(i) as IssueWithAssignee : i)),
+      );
+    }
+    qc.setQueriesData<IssueWithAssignee[]>(
+      { queryKey: ['userIssues'] },
+      (old) => old?.map(i => (i.code === issueCode ? updateCount(i) as IssueWithAssignee : i)),
+    );
+  };
+
   const update = useMutation({
     mutationFn: (data: Parameters<typeof issuesApi.update>[1]) => issuesApi.update(issueCode, data),
 
@@ -92,6 +109,62 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
       qc.invalidateQueries({ queryKey: ['issue', issueCode] });
       if (ctx?.projectCode)
         qc.invalidateQueries({ queryKey: ['issues', ctx.projectCode] });
+    },
+  });
+
+  const createComment = useMutation({
+    mutationFn: (content: string) => commentsApi.create(issueCode, content),
+
+    onMutate: async (content) => {
+      const projectCode = issue?.projectCode;
+      const tempId = `pending-${Date.now()}`;
+
+      await qc.cancelQueries({ queryKey: ['comments', issueCode] });
+      await qc.cancelQueries({ queryKey: ['issue', issueCode] });
+      if (projectCode) await qc.cancelQueries({ queryKey: ['issues', projectCode] });
+      await qc.cancelQueries({ queryKey: ['userIssues'] });
+
+      const prevComments = qc.getQueryData<Comment[]>(['comments', issueCode]);
+      const prevDetail = qc.getQueryData<IssueWithAssignee>(['issue', issueCode]);
+      const prevLists = projectCode
+        ? qc.getQueriesData<IssueWithAssignee[]>({ queryKey: ['issues', projectCode] })
+        : [];
+      const prevUserIssueLists = qc.getQueriesData<IssueWithAssignee[]>({ queryKey: ['userIssues'] });
+
+      const optimisticComment: Comment = {
+        id: tempId,
+        issueCode,
+        postedBy: user?.handle ?? '',
+        postedOn: new Date().toISOString(),
+        editedOn: null,
+        content,
+        author: user ?? undefined,
+      };
+
+      qc.setQueryData<Comment[]>(['comments', issueCode], (old = []) => [...old, optimisticComment]);
+      updateCachedCommentCount(1, projectCode);
+
+      return { tempId, prevComments, prevDetail, prevLists, prevUserIssueLists, projectCode };
+    },
+
+    onError: (_err, _content, ctx) => {
+      qc.setQueryData(['comments', issueCode], ctx?.prevComments);
+      if (ctx?.prevDetail) qc.setQueryData(['issue', issueCode], ctx.prevDetail);
+      ctx?.prevLists.forEach(([key, val]) => qc.setQueryData(key, val));
+      ctx?.prevUserIssueLists.forEach(([key, val]) => qc.setQueryData(key, val));
+    },
+
+    onSuccess: (comment, _content, ctx) => {
+      qc.setQueryData<Comment[]>(['comments', issueCode], (old) =>
+        old?.map(c => (c.id === ctx?.tempId ? comment : c)),
+      );
+    },
+
+    onSettled: (_data, _err, _content, ctx) => {
+      qc.invalidateQueries({ queryKey: ['comments', issueCode] });
+      qc.invalidateQueries({ queryKey: ['issue', issueCode] });
+      if (ctx?.projectCode) qc.invalidateQueries({ queryKey: ['issues', ctx.projectCode] });
+      qc.invalidateQueries({ queryKey: ['userIssues'] });
     },
   });
 
@@ -284,19 +357,18 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
                 }}
                 onDelete={() => {
                   commentsApi.delete(c.id).then(() => {
+                    qc.setQueryData<Comment[]>(['comments', issueCode], old => old?.filter(comment => comment.id !== c.id));
+                    updateCachedCommentCount(-1);
                     qc.invalidateQueries({ queryKey: ['comments', issueCode] });
                     qc.invalidateQueries({ queryKey: ['issue', issueCode] });
+                    qc.invalidateQueries({ queryKey: ['issues', issue.projectCode] });
+                    qc.invalidateQueries({ queryKey: ['userIssues'] });
                   });
                 }}
               />
             ))}
             <NewCommentBox
-              onSubmit={content => {
-                commentsApi.create(issueCode, content).then(() => {
-                  qc.invalidateQueries({ queryKey: ['comments', issueCode] });
-                  qc.invalidateQueries({ queryKey: ['issue', issueCode] });
-                });
-              }}
+              onSubmit={content => createComment.mutate(content)}
             />
           </section>
         </div>

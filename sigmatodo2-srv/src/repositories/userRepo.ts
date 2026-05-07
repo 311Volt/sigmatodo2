@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index';
-import { users } from '../db/schema';
+import { projectUsers, users } from '../db/schema';
 import type { User } from 'sigmatodo2-common';
 
 function mapUser(row: typeof users.$inferSelect): User {
@@ -17,6 +17,26 @@ function mapUser(row: typeof users.$inferSelect): User {
 export async function getUserByHandle(handle: string): Promise<User | null> {
   const row = await db.query.users.findFirst({ where: eq(users.handle, handle) });
   return row ? mapUser(row) : null;
+}
+
+export async function hasMutualProject(handleA: string, handleB: string): Promise<boolean> {
+  if (handleA === handleB) return true;
+
+  const handleBProjects = await db.select({ projectCode: projectUsers.projectCode })
+    .from(projectUsers)
+    .where(eq(projectUsers.userHandle, handleB));
+
+  if (handleBProjects.length === 0) return false;
+
+  const rows = await db.select({ projectCode: projectUsers.projectCode })
+    .from(projectUsers)
+    .where(and(
+      eq(projectUsers.userHandle, handleA),
+      inArray(projectUsers.projectCode, handleBProjects.map(p => p.projectCode)),
+    ))
+    .limit(1);
+
+  return rows.length > 0;
 }
 
 export async function getUserByEmail(email: string): Promise<User | null> {

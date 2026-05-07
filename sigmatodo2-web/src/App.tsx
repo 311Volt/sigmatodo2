@@ -7,6 +7,7 @@ import LoginPage from '@/pages/LoginPage';
 import WelcomePage from '@/pages/WelcomePage';
 import ProjectPage from '@/pages/ProjectPage';
 import ProfilePage from '@/pages/ProfilePage';
+import UserIssuesPage from '@/pages/UserIssuesPage';
 import EditProfilePage from '@/pages/EditProfilePage';
 import AuthCallbackPage from '@/pages/AuthCallbackPage';
 import InvitePage from '@/pages/InvitePage';
@@ -38,6 +39,7 @@ function AppRoutes() {
       <Route path="/projects/:code" element={<ProtectedRoute><ProjectPage /></ProtectedRoute>} />
       <Route path="/projects/:code/issues/:issueCode" element={<ProtectedRoute><ProjectPage /></ProtectedRoute>} />
       <Route path="/profile/:handle" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+      <Route path="/profile/:handle/issues" element={<ProtectedRoute><UserIssuesPage /></ProtectedRoute>} />
       <Route path="/profile/:handle/edit" element={<ProtectedRoute><EditProfilePage /></ProtectedRoute>} />
       <Route path="/invite/:invitationCode" element={<InvitePage />} />
       <Route path="*" element={<Navigate to="/" replace />} />

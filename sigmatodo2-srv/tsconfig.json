@@ -14,6 +14,8 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
     
+    "types": ["bun"],
+
     // Some stricter flags (disabled by default)
     "noUnusedLocals": false,
     "noUnusedParameters": false,

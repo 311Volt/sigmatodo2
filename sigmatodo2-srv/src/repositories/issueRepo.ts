@@ -1,4 +1,4 @@
-import { eq, desc, asc, sql } from 'drizzle-orm';
+import { and, eq, desc, inArray, sql } from 'drizzle-orm';
 import { db } from '../db/index';
 import { issues, issueSequences } from '../db/schema';
 import type { Issue, IssueWithAssignee, Priority, SortOption } from 'sigmatodo2-common';
@@ -71,6 +71,37 @@ export async function getProjectIssues(projectCode: string, sort: SortOption): P
 
   const rows = await db.query.issues.findMany({
     where: eq(issues.projectCode, projectCode),
+    orderBy: sort === 'relevant' || sort === 'due' ? undefined : orderBy,
+    with: { assignee: true, creator: true },
+  });
+
+  const mapped = rows.map(mapIssueWithAssignee);
+
+  if (sort === 'due') {
+    return mapped.sort((a, b) => {
+      if (!a.dueBy && !b.dueBy) return 0;
+      if (!a.dueBy) return 1;
+      if (!b.dueBy) return -1;
+      return new Date(a.dueBy).getTime() - new Date(b.dueBy).getTime();
+    });
+  }
+
+  return mapped;
+}
+
+export async function getAssignedIssuesInProjects(
+  assignedTo: string,
+  projectCodes: string[],
+  sort: SortOption,
+): Promise<IssueWithAssignee[]> {
+  if (projectCodes.length === 0) return [];
+
+  const orderBy = sort === 'created' ? [desc(issues.createdOn)]
+    : sort === 'comments' ? [desc(issues.commentCount)]
+    : [desc(issues.createdOn)];
+
+  const rows = await db.query.issues.findMany({
+    where: and(eq(issues.assignedTo, assignedTo), inArray(issues.projectCode, projectCodes)),
     orderBy: sort === 'relevant' || sort === 'due' ? undefined : orderBy,
     with: { assignee: true, creator: true },
   });
