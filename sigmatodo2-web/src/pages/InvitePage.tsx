@@ -102,7 +102,7 @@ export default function InvitePage() {
         ) : (
           <div className="flex flex-col gap-2 items-center">
             <p className="text-sm text-muted-foreground">Sign in to accept this invitation.</p>
-            <Button size="lg" onClick={() => navigate('/login')}>Sign in</Button>
+            <Button size="lg" onClick={() => navigate(`/login?redirect=/invite/${invitationCode}`)}>Sign in</Button>
           </div>
         )}
 

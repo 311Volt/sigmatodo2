@@ -14,10 +14,12 @@ export default function AuthCallbackPage() {
 
     if (!token) { navigate('/login'); return; }
 
+    const redirect = sessionStorage.getItem('authRedirect') ?? '/';
+    sessionStorage.removeItem('authRedirect');
     localStorage.setItem('token', token);
     auth.me().then(user => {
       login(token, user);
-      navigate(isNew ? `/profile/${user.handle}/edit` : '/', { replace: true });
+      navigate(isNew ? `/profile/${user.handle}/edit` : redirect, { replace: true });
     }).catch(() => navigate('/login'));
   }, [login, navigate]);
 

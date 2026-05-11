@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { auth, isWakeupError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,8 @@ import { Loader2 } from 'lucide-react';
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = new URLSearchParams(location.search).get('redirect') ?? '/';
   const [serverMode, setServerMode] = useState<'dev' | 'prod' | 'waking' | 'error' | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [formMode, setFormMode] = useState<'login' | 'register'>('login');
@@ -51,7 +53,7 @@ export default function LoginPage() {
         ? await auth.login(form.handle, form.password)
         : await auth.register(form.handle, form.displayName, form.password);
       login(res.token, res.user);
-      navigate('/');
+      navigate(redirectTo);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -92,9 +94,10 @@ export default function LoginPage() {
             <CardTitle className="text-center text-2xl">sigmatodo2</CardTitle>
           </CardHeader>
           <CardContent>
-            <a href="/api/auth/google">
-              <Button className="w-full" size="lg">Sign in with Google</Button>
-            </a>
+            <Button className="w-full" size="lg" onClick={() => {
+              if (redirectTo !== '/') sessionStorage.setItem('authRedirect', redirectTo);
+              window.location.href = '/api/auth/google';
+            }}>Sign in with Google</Button>
           </CardContent>
         </Card>
       </div>
