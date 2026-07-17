@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import type { ElementType } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -9,6 +9,7 @@ import {
   Check,
   ChevronsUp,
   Code2,
+  Copy,
   File as FileIcon,
   FileText,
   Image,
@@ -22,6 +23,7 @@ import {
 import { issues as issuesApi, attachments as attachmentsApi, comments as commentsApi, projects as projectsApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { fileUrl } from '@/lib/files';
+import { formatIssueForLlmXml } from '@/lib/issueLlmExport';
 import { formatTimeLeft } from '@/lib/time';
 import type { Attachment, Project, Comment, IssueWithAssignee } from 'sigmatodo2-common';
 import MarkdownEditor from '@/components/MarkdownEditor';
@@ -61,34 +63,40 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
   const { user } = useAuth();
   const qc = useQueryClient();
   const canEdit = project?.myPermissions?.editIssues ?? false;
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [editingDesc, setEditingDesc] = useState(false);
   const [descDraft, setDescDraft] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: issue, isLoading } = useQuery({
     queryKey: ['issue', issueCode],
     queryFn: () => issuesApi.get(issueCode),
   });
 
-  const { data: attachmentList = [] } = useQuery({
+  const { data: attachmentList = [], isLoading: isLoadingAttachments } = useQuery({
     queryKey: ['attachments', issueCode],
     queryFn: () => attachmentsApi.list(issueCode),
     enabled: !!issue,
   });
 
-  const { data: commentList = [] } = useQuery({
+  const { data: commentList = [], isLoading: isLoadingComments } = useQuery({
     queryKey: ['comments', issueCode],
     queryFn: () => commentsApi.list(issueCode),
     enabled: !!issue,
   });
 
-  const { data: memberList = [] } = useQuery({
+  const { data: memberList = [], isLoading: isLoadingMembers } = useQuery({
     queryKey: ['members', project?.code],
     queryFn: () => projectsApi.getMembers(project!.code),
     enabled: !!project,
   });
+
+  useEffect(() => () => {
+    if (copyResetRef.current) clearTimeout(copyResetRef.current);
+  }, []);
 
   const updateCachedCommentCount = (delta: number, projectCode = issue?.projectCode) => {
     const updateCount = (old: IssueWithAssignee | undefined) =>
@@ -242,6 +250,42 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
   const statusMap = Object.fromEntries(statusDefs.map(s => [s.code, s]));
   const currentStatus = statusMap[issue.status];
   const timeLeft = formatTimeLeft(issue.dueBy);
+  const isPreparingLlmCopy = isLoadingAttachments || isLoadingComments || (!!project && isLoadingMembers);
+  const CopyForLlmsIcon = copyState === 'copied' ? Check : copyState === 'failed' ? X : Copy;
+  const copyForLlmsLabel = isPreparingLlmCopy
+    ? 'Preparing...'
+    : copyState === 'copied'
+      ? 'Copied'
+      : copyState === 'failed'
+        ? 'Copy failed'
+        : 'Copy for LLMs';
+  const setTemporaryCopyState = (state: 'copied' | 'failed') => {
+    if (copyResetRef.current) clearTimeout(copyResetRef.current);
+    setCopyState(state);
+    copyResetRef.current = setTimeout(() => setCopyState('idle'), 2000);
+  };
+  const copyForLlms = async () => {
+    if (isPreparingLlmCopy) return;
+
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error('Clipboard API is unavailable');
+      }
+
+      const xml = formatIssueForLlmXml({
+        issue,
+        project,
+        attachments: attachmentList,
+        comments: commentList,
+        members: memberList,
+        getAttachmentUrl: attachment => attachmentsApi.getUrl(attachment.id),
+      });
+      await navigator.clipboard.writeText(xml);
+      setTemporaryCopyState('copied');
+    } catch {
+      setTemporaryCopyState('failed');
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -301,9 +345,22 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
             )}
           </div>
         </div>
-        <Button variant="ghost" size="icon" className="shrink-0" onClick={onClose}>
-          <X className="size-4" />
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs whitespace-nowrap"
+            onClick={copyForLlms}
+            disabled={isPreparingLlmCopy}
+            aria-label="Copy issue details for LLMs"
+          >
+            <CopyForLlmsIcon className="size-3.5 mr-1" />
+            {copyForLlmsLabel}
+          </Button>
+          <Button variant="ghost" size="icon" className="shrink-0" onClick={onClose}>
+            <X className="size-4" />
+          </Button>
+        </div>
       </div>
 
       <ScrollArea className="flex-1 min-h-0">
