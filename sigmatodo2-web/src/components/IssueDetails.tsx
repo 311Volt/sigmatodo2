@@ -63,7 +63,7 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
   const { user } = useAuth();
   const qc = useQueryClient();
   const canEdit = project?.myPermissions?.editIssues ?? false;
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [copyState, setCopyState] = useState<'idle' | 'preparing' | 'copied' | 'failed'>('idle');
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [editingDesc, setEditingDesc] = useState(false);
@@ -76,19 +76,19 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
     queryFn: () => issuesApi.get(issueCode),
   });
 
-  const { data: attachmentList = [], isLoading: isLoadingAttachments } = useQuery({
+  const { data: attachmentList = [], refetch: refetchAttachments } = useQuery({
     queryKey: ['attachments', issueCode],
     queryFn: () => attachmentsApi.list(issueCode),
     enabled: !!issue,
   });
 
-  const { data: commentList = [], isLoading: isLoadingComments } = useQuery({
+  const { data: commentList = [], refetch: refetchComments } = useQuery({
     queryKey: ['comments', issueCode],
     queryFn: () => commentsApi.list(issueCode),
     enabled: !!issue,
   });
 
-  const { data: memberList = [], isLoading: isLoadingMembers } = useQuery({
+  const { data: memberList = [], refetch: refetchMembers } = useQuery({
     queryKey: ['members', project?.code],
     queryFn: () => projectsApi.getMembers(project!.code),
     enabled: !!project,
@@ -250,19 +250,27 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
   const statusMap = Object.fromEntries(statusDefs.map(s => [s.code, s]));
   const currentStatus = statusMap[issue.status];
   const timeLeft = formatTimeLeft(issue.dueBy);
-  const isPreparingLlmCopy = isLoadingAttachments || isLoadingComments || (!!project && isLoadingMembers);
+  const isPreparingLlmCopy = copyState === 'preparing';
   const CopyForLlmsIcon = copyState === 'copied' ? Check : copyState === 'failed' ? X : Copy;
-  const copyForLlmsLabel = isPreparingLlmCopy
+  const copyForLlmsLabel = copyState === 'preparing'
     ? 'Preparing...'
     : copyState === 'copied'
       ? 'Copied'
       : copyState === 'failed'
         ? 'Copy failed'
         : 'Copy for LLMs';
+  const startCopyPreparation = () => {
+    if (copyResetRef.current) clearTimeout(copyResetRef.current);
+    copyResetRef.current = null;
+    setCopyState('preparing');
+  };
   const setTemporaryCopyState = (state: 'copied' | 'failed') => {
     if (copyResetRef.current) clearTimeout(copyResetRef.current);
     setCopyState(state);
-    copyResetRef.current = setTimeout(() => setCopyState('idle'), 2000);
+    copyResetRef.current = setTimeout(() => {
+      setCopyState('idle');
+      copyResetRef.current = null;
+    }, 2000);
   };
   const copyForLlms = async () => {
     if (isPreparingLlmCopy) return;
@@ -272,12 +280,27 @@ export default function IssueDetails({ issueCode, project, onClose }: IssueDetai
         throw new Error('Clipboard API is unavailable');
       }
 
+      startCopyPreparation();
+      const [attachmentResult, commentResult] = await Promise.all([
+        refetchAttachments(),
+        refetchComments(),
+      ]);
+      if (attachmentResult.isError) throw attachmentResult.error;
+      if (commentResult.isError) throw commentResult.error;
+
+      let members = memberList;
+      if (project) {
+        const memberResult = await refetchMembers();
+        if (memberResult.isError) throw memberResult.error;
+        members = memberResult.data ?? memberList;
+      }
+
       const xml = formatIssueForLlmXml({
         issue,
         project,
-        attachments: attachmentList,
-        comments: commentList,
-        members: memberList,
+        attachments: attachmentResult.data ?? attachmentList,
+        comments: commentResult.data ?? commentList,
+        members,
         getAttachmentUrl: attachment => attachmentsApi.getUrl(attachment.id),
       });
       await navigator.clipboard.writeText(xml);
